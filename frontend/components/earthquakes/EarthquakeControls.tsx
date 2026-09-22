@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type RefObject } from "react";
 import type { Earthquake } from "@/lib/earthquakes";
 
 type EarthquakeControlsProps = {
@@ -8,6 +8,9 @@ type EarthquakeControlsProps = {
   readonly isLoading: boolean;
   readonly error: string | null;
   readonly selectedEarthquake: Earthquake | null;
+  readonly selectedEarthquakeIndex: number;
+  readonly totalEarthquakes: number;
+  readonly detailsRef: RefObject<HTMLElement | null>;
   readonly onToggle: () => void;
   readonly onRefresh: () => void;
 };
@@ -34,6 +37,18 @@ function UtcClock() {
   return <output className="earthquake-clock">UTC {time}</output>;
 }
 
+export function EarthquakeHeader() {
+  return (
+    <header className="stage-header">
+      <span className="stage-wordmark">EarthView</span>
+      <span className="stage-header-divider" />
+      <span>Real-time Earth Data</span>
+      <span>•</span>
+      <UtcClock />
+    </header>
+  );
+}
+
 function formatEventTime(timestamp: number) {
   return `${new Intl.DateTimeFormat("en-GB", {
     dateStyle: "medium",
@@ -42,19 +57,34 @@ function formatEventTime(timestamp: number) {
   }).format(new Date(timestamp))} UTC`;
 }
 
-function EarthquakeDetails({ earthquake }: { readonly earthquake: Earthquake }) {
+function formatCoordinates(latitude: number, longitude: number) {
+  const latitudeDirection = latitude >= 0 ? "N" : "S";
+  const longitudeDirection = longitude >= 0 ? "E" : "W";
+  return `${Math.abs(latitude).toFixed(2)}° ${latitudeDirection}, ${Math.abs(longitude).toFixed(2)}° ${longitudeDirection}`;
+}
+
+function EarthquakeDetails({
+  earthquake,
+  index,
+  total,
+  detailsRef,
+}: {
+  readonly earthquake: Earthquake;
+  readonly index: number;
+  readonly total: number;
+  readonly detailsRef: RefObject<HTMLElement | null>;
+}) {
   return (
-    <section className="earthquake-details" aria-label="Selected earthquake">
-      <div className="earthquake-details-heading">EARTHQUAKE EVENT</div>
+    <section className="earthquake-details" aria-label="Selected earthquake" ref={detailsRef}>
+      <div className="earthquake-details-heading">
+        <span>Earthquake event</span>
+        <span>{String(index + 1).padStart(3, "0")} / {total}</span>
+      </div>
+      <div className="earthquake-primary">
+        <div>M {earthquake.magnitude.toFixed(1)}</div>
+        <p>{earthquake.location}</p>
+      </div>
       <dl>
-        <div>
-          <dt>Magnitude</dt>
-          <dd>M {earthquake.magnitude.toFixed(1)}</dd>
-        </div>
-        <div>
-          <dt>Location</dt>
-          <dd>{earthquake.location}</dd>
-        </div>
         <div>
           <dt>Time</dt>
           <dd>{formatEventTime(earthquake.time)}</dd>
@@ -62,6 +92,10 @@ function EarthquakeDetails({ earthquake }: { readonly earthquake: Earthquake }) 
         <div>
           <dt>Depth</dt>
           <dd>{earthquake.depth.toFixed(1)} km</dd>
+        </div>
+        <div>
+          <dt>Coordinates</dt>
+          <dd>{formatCoordinates(earthquake.lat, earthquake.lon)}</dd>
         </div>
       </dl>
     </section>
@@ -73,13 +107,15 @@ export function EarthquakeControls({
   isLoading,
   error,
   selectedEarthquake,
+  selectedEarthquakeIndex,
+  totalEarthquakes,
+  detailsRef,
   onToggle,
   onRefresh,
 }: EarthquakeControlsProps) {
   return (
     <>
       <aside className="earthquake-controls" aria-label="Earthquake data controls">
-        <UtcClock />
         <div className="earthquake-actions">
           <button
             type="button"
@@ -93,9 +129,21 @@ export function EarthquakeControls({
             {isLoading ? "Refreshing" : "Refresh"}
           </button>
         </div>
+        {!isLoading && !error ? (
+          <output className="earthquake-count">
+            {totalEarthquakes} {totalEarthquakes === 1 ? "earthquake" : "earthquakes"}
+          </output>
+        ) : null}
         {error ? <p className="earthquake-status" role="alert">{error}</p> : null}
       </aside>
-      {selectedEarthquake ? <EarthquakeDetails earthquake={selectedEarthquake} /> : null}
+      {selectedEarthquake ? (
+        <EarthquakeDetails
+          earthquake={selectedEarthquake}
+          index={selectedEarthquakeIndex}
+          total={totalEarthquakes}
+          detailsRef={detailsRef}
+        />
+      ) : null}
     </>
   );
 }

@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
-import { useThree, type ThreeEvent } from "@react-three/fiber";
+import { useEffect, useMemo, useRef, type RefObject } from "react";
+import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import {
   BufferGeometry,
   Float32BufferAttribute,
+  Group,
   Points,
   PointsMaterial,
   type Intersection,
@@ -19,6 +20,14 @@ type EarthquakeLayerProps = {
   readonly selectedEarthquakeId: string | null;
   readonly visible: boolean;
   readonly onSelect: (earthquakeId: string) => void;
+  readonly onSelectedPositionChange: (position: SelectedEarthquakeScreenPosition | null) => void;
+};
+
+export type SelectedEarthquakeScreenPosition = {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
 };
 
 const markerRadius = 1.012;
@@ -56,13 +65,69 @@ function raycastEarthquakes(
   if (candidates[0]) intersections.push(candidates[0]);
 }
 
+function SelectedEarthquakeProjection({
+  layer,
+  position,
+  onChange,
+}: {
+  readonly layer: RefObject<Group | null>;
+  readonly position: Vector3;
+  readonly onChange: (position: SelectedEarthquakeScreenPosition | null) => void;
+}) {
+  const worldPosition = useMemo(() => new Vector3(), []);
+  const cameraPosition = useMemo(() => new Vector3(), []);
+  const surfaceNormal = useMemo(() => new Vector3(), []);
+  const cameraDirection = useMemo(() => new Vector3(), []);
+
+  useEffect(() => () => onChange(null), [onChange]);
+
+  useFrame(({ camera, size }) => {
+    if (!layer.current) return;
+
+    worldPosition.copy(position);
+    layer.current.localToWorld(worldPosition);
+    camera.getWorldPosition(cameraPosition);
+    surfaceNormal.copy(worldPosition).normalize();
+    cameraDirection.subVectors(cameraPosition, worldPosition).normalize();
+
+    if (surfaceNormal.dot(cameraDirection) <= 0) {
+      onChange(null);
+      return;
+    }
+
+    worldPosition.project(camera);
+    if (
+      worldPosition.x < -1
+      || worldPosition.x > 1
+      || worldPosition.y < -1
+      || worldPosition.y > 1
+      || worldPosition.z < -1
+      || worldPosition.z > 1
+    ) {
+      onChange(null);
+      return;
+    }
+
+    onChange({
+      x: (worldPosition.x + 1) * size.width * 0.5,
+      y: (1 - worldPosition.y) * size.height * 0.5,
+      width: size.width,
+      height: size.height,
+    });
+  });
+
+  return null;
+}
+
 export function EarthquakeLayer({
   earthquakes,
   selectedEarthquakeId,
   visible,
   onSelect,
+  onSelectedPositionChange,
 }: EarthquakeLayerProps) {
   const invalidate = useThree((state) => state.invalidate);
+  const layer = useRef<Group>(null);
   const positions = useMemo(
     () => earthquakes.map((earthquake) => geoToVector3([earthquake.lon, earthquake.lat], markerRadius)),
     [earthquakes],
@@ -123,6 +188,9 @@ export function EarthquakeLayer({
   useEffect(() => {
     invalidate();
   }, [geometry, invalidate, selectedGeometry, visible]);
+  useEffect(() => {
+    if (!visible || selectedIndex < 0) onSelectedPositionChange(null);
+  }, [onSelectedPositionChange, selectedIndex, visible]);
 
   if (!visible) return null;
 
@@ -133,7 +201,7 @@ export function EarthquakeLayer({
   };
 
   return (
-    <>
+    <group ref={layer}>
       <points
         geometry={geometry}
         material={markerMaterial}
@@ -142,6 +210,13 @@ export function EarthquakeLayer({
         renderOrder={2}
       />
       {selectedGeometry ? <points geometry={selectedGeometry} material={selectedMaterial} raycast={() => null} renderOrder={3} /> : null}
-    </>
+      {selectedGeometry ? (
+        <SelectedEarthquakeProjection
+          layer={layer}
+          position={positions[selectedIndex]}
+          onChange={onSelectedPositionChange}
+        />
+      ) : null}
+    </group>
   );
 }

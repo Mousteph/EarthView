@@ -17,9 +17,11 @@ Do not use cool atmospheric glows, drop shadows, satellite imagery, map tiles, o
 
 ## Typography and page chrome
 
-Use a tight-tracked geometric sans-serif. Ataero Retina OB is the intended licensed face; until it is available, use the documented Inter/system fallback. Keep the visible stage to an EarthView wordmark, a micro context label, a large two-line `EARTH / VIEW` display, and an interaction hint. Labels are uppercase, 11px, and letter-spaced. The display uses a 0.8 line-height.
+Use a tight-tracked geometric sans-serif. Ataero Retina OB is the intended licensed face; until it is available, use the documented Inter/system fallback. The desktop stage has an EarthView masthead, `REAL-TIME EARTH DATA`, live UTC time, an earthquake data row with its small live count, a large two-line `EARTH / VIEW` display, a selected-event data panel, and an interaction hint. Labels are uppercase, letter-spaced, and deliberately small. The display uses a 0.8 line-height. When globe geometry sits beneath functional text, use a soft translucent parchment veil with a blurred backdrop; it must be diffuse and borderless, not a card, shadow, or layout change. The display title and interaction hint remain behind the transparent globe canvas so geographic geometry can occlude them.
 
-Keep the stage free of decorative concentric circles so the globe and geographic detail remain the sole visual focus.
+An active earthquake uses a restrained screen-space leader: a fine segmented line running from a ring around the selected marker to the event panel. The selected dark point remains visible inside that ring, and the leader disappears when the marker is not camera-facing.
+
+Do not add top-right navigation, coordinate readouts, title subtitles, global-perspective labels, right-side mission copy, or event-detail CTAs. Keep the stage free of decorative concentric circles so the globe and geographic detail remain the sole visual focus.
 
 ## Globe
 

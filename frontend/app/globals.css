@@ -57,72 +57,119 @@ body {
   pointer-events: none;
 }
 
-.stage-overlay {
+.stage-header {
   position: absolute;
-  z-index: 2;
-  inset: 0;
-  overflow: hidden;
+  z-index: 10;
+  top: 32px;
+  left: 48px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
   color: var(--color-ink);
-  pointer-events: none;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
   text-transform: uppercase;
 }
 
-.stage-wordmark,
-.stage-context,
-.stage-footer {
+.stage-header,
+.earthquake-controls,
+.earthquake-details {
+  isolation: isolate;
+}
+
+.stage-header::before,
+.earthquake-controls::before,
+.earthquake-details::before {
   position: absolute;
-  font-size: var(--font-size-label);
+  z-index: -1;
+  inset: -22px -28px;
+  border-radius: 28px;
+  background: rgb(229 228 224 / 56%);
+  content: "";
+  filter: blur(13px);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  pointer-events: none;
+}
+
+.stage-wordmark {
+  font-size: 15px;
   font-weight: 700;
-  letter-spacing: var(--letter-spacing-label);
+  letter-spacing: 0.26em;
+}
+
+.stage-header-divider {
+  width: 1px;
+  height: 22px;
+  background: color-mix(in srgb, var(--color-ink) 45%, transparent);
+}
+
+.earthquake-clock {
+  color: color-mix(in srgb, var(--color-ink) 68%, transparent);
+  font: inherit;
 }
 
 .earthquake-controls {
   position: absolute;
   z-index: 10;
-  top: 58px;
-  left: 30px;
+  top: clamp(118px, 14vh, 158px);
+  left: 48px;
   display: grid;
   justify-items: start;
-  gap: 9px;
-  max-width: min(330px, calc(100vw - 60px));
+  gap: 14px;
+  max-width: min(390px, calc(100vw - 96px));
   color: var(--color-ink);
   text-align: left;
   text-transform: uppercase;
 }
 
-.earthquake-clock,
 .earthquake-status,
 .earthquake-details-heading,
 .earthquake-details dt {
-  font-size: var(--font-size-label);
-  letter-spacing: var(--letter-spacing-label);
-}
-
-.earthquake-clock {
-  color: color-mix(in srgb, var(--color-ink) 68%, transparent);
+  font-size: 11px;
+  letter-spacing: 0.18em;
 }
 
 .earthquake-actions {
   display: flex;
-  justify-content: start;
-  gap: 6px;
+  align-items: center;
+  gap: 28px;
 }
 
 .earthquake-actions button {
-  border: 1px solid color-mix(in srgb, var(--color-ink) 55%, transparent);
-  padding: 7px 9px;
-  background: var(--color-parchment);
+  border: 0;
+  padding: 0;
+  background: transparent;
   color: var(--color-ink);
-  font: 700 var(--font-size-label)/1 var(--font-family-sans);
-  letter-spacing: var(--letter-spacing-label);
+  font: 500 12px/1 var(--font-family-sans);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
-.earthquake-actions button:hover:not(:disabled),
-.earthquake-actions button[aria-pressed="true"] {
-  border-color: var(--color-ink);
+.earthquake-actions button:first-child {
+  position: relative;
+  font-weight: 500;
+}
+
+.earthquake-actions button:first-child::after {
+  position: absolute;
+  right: 0;
+  bottom: -13px;
+  left: 0;
+  height: 1px;
   background: var(--color-ink);
-  color: var(--color-parchment);
+  content: "";
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.earthquake-actions button:first-child[aria-pressed="true"]::after {
+  transform: scaleX(1);
+}
+
+.earthquake-actions button:first-child[aria-pressed="true"] {
+  font-weight: 700;
 }
 
 .earthquake-actions button:disabled {
@@ -131,39 +178,90 @@ body {
 }
 
 .earthquake-status {
-  max-width: 260px;
+  max-width: 300px;
   margin: 0;
   color: #a03d2b;
   line-height: 1.4;
 }
 
+.earthquake-count {
+  color: color-mix(in srgb, var(--color-ink) 62%, transparent);
+  font: 10px/1 var(--font-family-sans);
+  letter-spacing: 0.16em;
+}
+
+.earthquake-connector {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease-out;
+}
+
+.earthquake-connector path,
+.earthquake-connector circle {
+  fill: none;
+  stroke: color-mix(in srgb, var(--color-ink) 46%, transparent);
+}
+
+.earthquake-connector path {
+  stroke-width: 1;
+}
+
+.earthquake-connector circle {
+  stroke-width: 1.25;
+}
+
 .earthquake-details {
   position: absolute;
   z-index: 10;
-  top: 64px;
-  right: 30px;
-  width: min(330px, calc(100vw - 60px));
-  border: 1px solid color-mix(in srgb, var(--color-ink) 68%, transparent);
-  padding: 13px;
-  background: rgb(229 228 224 / 96%);
+  top: clamp(146px, 17vh, 202px);
+  right: 48px;
+  width: min(360px, calc(100vw - 96px));
   text-align: left;
 }
 
 .earthquake-details-heading {
-  margin-bottom: 9px;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-ink) 38%, transparent);
+  padding-bottom: 14px;
   text-transform: uppercase;
+}
+
+.earthquake-primary {
+  border-bottom: 1px solid color-mix(in srgb, var(--color-ink) 38%, transparent);
+  padding-bottom: 20px;
+}
+
+.earthquake-primary div {
+  font-size: clamp(54px, 5vw, 70px);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+}
+
+.earthquake-primary p {
+  margin: 14px 0 0;
+  font-size: 20px;
+  line-height: 1.2;
 }
 
 .earthquake-details dl {
   display: grid;
-  gap: 8px;
-  margin: 0;
+  gap: 13px;
+  margin: 20px 0 0;
 }
 
 .earthquake-details dl > div {
   display: grid;
-  grid-template-columns: 76px 1fr;
-  gap: 10px;
+  grid-template-columns: 94px 1fr;
+  gap: 18px;
 }
 
 .earthquake-details dt,
@@ -176,18 +274,9 @@ body {
 }
 
 .earthquake-details dd {
-  font-size: 12px;
-  line-height: 1.25;
-}
-
-.stage-wordmark {
-  top: 30px;
-  left: 30px;
-}
-
-.stage-context {
-  top: 30px;
-  right: 30px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  line-height: 1.35;
 }
 
 .stage-title {
@@ -203,43 +292,75 @@ body {
 }
 
 .stage-footer {
+  position: absolute;
+  z-index: 0;
   right: 30px;
   bottom: 30px;
   color: color-mix(in srgb, var(--color-ink) 68%, transparent);
+  font-size: 10px;
   font-weight: 400;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
 }
 
 @media (max-width: 640px) {
-  .stage-wordmark,
-  .stage-context,
-  .stage-footer {
-    font-size: 9px;
+  .stage-header {
+    top: 19px;
+    left: 19px;
+    gap: 12px;
+    font-size: 8px;
+    letter-spacing: 0.14em;
+  }
+
+  .stage-header-divider {
+    height: 16px;
   }
 
   .stage-wordmark {
-    top: 19px;
-    left: 19px;
+    font-size: 11px;
   }
 
-  .stage-context {
-    top: 19px;
+  .stage-header > span:nth-of-type(3),
+  .stage-header > span:nth-of-type(4) {
+    display: none;
+  }
+
+  .earthquake-controls {
+    top: 86px;
+    left: 19px;
+    max-width: calc(100vw - 38px);
+  }
+
+  .earthquake-actions {
+    gap: 16px;
+  }
+
+  .earthquake-details {
+    top: auto;
     right: 19px;
+    bottom: 62px;
+    left: 19px;
+    width: auto;
+  }
+
+  .earthquake-primary div {
+    font-size: 46px;
+  }
+
+  .earthquake-primary p {
+    font-size: 16px;
+  }
+
+  .stage-title {
+    left: 24px;
+    bottom: 26px;
+    font-size: clamp(48px, 17vw, 76px);
   }
 
   .stage-footer {
     right: 19px;
     bottom: 19px;
-  }
-
-  .earthquake-controls {
-    top: 46px;
-    left: 19px;
-    max-width: calc(100vw - 38px);
-  }
-
-  .earthquake-details {
-    top: 116px;
-    right: 19px;
-    width: min(300px, calc(100vw - 38px));
+    font-size: 8px;
+    letter-spacing: 0.16em;
   }
 }
