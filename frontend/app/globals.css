@@ -1,10 +1,4 @@
-:root {
-  color-scheme: light;
-  background: #e5e4e0;
-  --parchment: #e5e4e0;
-  --ink: #1d1d1d;
-  --ash: #bfbebe;
-}
+@import "../styles/design-tokens.css";
 
 * {
   box-sizing: border-box;
@@ -19,9 +13,9 @@ body {
 
 body {
   overflow: hidden;
-  background: var(--parchment);
-  color: var(--ink);
-  font-family: Inter, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  background: var(--color-parchment);
+  color: var(--color-ink);
+  font-family: var(--font-family-sans);
 }
 
 .earthview {
@@ -42,9 +36,9 @@ body {
   display: grid;
   gap: 3px;
   padding: 10px 12px;
-  background: rgb(10 45 45 / 88%);
-  color: #e5e4e0;
-  font: 10px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--color-debug-panel);
+  color: var(--color-parchment);
+  font: 10px/1.25 var(--font-family-mono);
   pointer-events: none;
 }
 
@@ -56,7 +50,7 @@ body {
 
 .stage-overlay {
   overflow: hidden;
-  color: var(--ink);
+  color: var(--color-ink);
   text-transform: uppercase;
 }
 
@@ -64,9 +58,9 @@ body {
 .stage-context,
 .stage-footer {
   position: absolute;
-  font-size: 11px;
+  font-size: var(--font-size-label);
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--letter-spacing-label);
 }
 
 .stage-wordmark {
@@ -86,13 +80,13 @@ body {
   font-size: clamp(54px, 9vw, 103px);
   font-weight: 400;
   letter-spacing: 0.013em;
-  line-height: 0.8;
+  line-height: var(--line-height-display);
 }
 
 .stage-footer {
   right: 30px;
   bottom: 30px;
-  color: color-mix(in srgb, var(--ink) 68%, transparent);
+  color: color-mix(in srgb, var(--color-ink) 68%, transparent);
   font-weight: 400;
 }
 

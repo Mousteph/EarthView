@@ -3,6 +3,8 @@
 import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { useCallback, useState } from "react";
+import { Color } from "three";
+import { readDesignColor } from "@/lib/designTokens";
 import { Earth } from "./Earth";
 import { GeographicLayers } from "./GeographicLayers";
 import type { GeographicLod } from "./geography";
@@ -38,8 +40,10 @@ export function GlobeScene({ autoRotate }: GlobeSceneProps) {
         dpr={[1, 1.5]}
         frameloop="demand"
         gl={{ antialias: true, powerPreference: "high-performance" }}
+        onCreated={({ scene }) => {
+          scene.background = new Color(readDesignColor("--color-parchment"));
+        }}
       >
-        <color attach="background" args={["#e5e4e0"]} />
         <group rotation={[0, -0.18, 0]}>
           <Earth />
           <GeographicLayers onActiveLodChange={handleActiveLodChange} />
