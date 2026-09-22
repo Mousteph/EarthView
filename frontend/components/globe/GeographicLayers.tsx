@@ -14,7 +14,7 @@ import {
 import { Land } from "./Land";
 
 type GeographicLayersProps = {
-  onActiveLodChange: (lod: GeographicLod) => void;
+  readonly onActiveLodChange: (lod: GeographicLod) => void;
 };
 
 type GeographyGeometries = ReturnType<typeof createGeographyGeometries>;

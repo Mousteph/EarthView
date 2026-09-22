@@ -1,10 +1,12 @@
 import type { BufferGeometry, LineBasicMaterial } from "three";
 
 type CountryBordersProps = {
-  geometry: BufferGeometry;
-  material: LineBasicMaterial;
+  readonly geometry: BufferGeometry;
+  readonly material: LineBasicMaterial;
 };
 
 export function CountryBorders({ geometry, material }: CountryBordersProps) {
-  return <lineSegments geometry={geometry} material={material} renderOrder={1} />;
+  return (
+    <lineSegments {...{ geometry, material, renderOrder: 1 }} />
+  );
 }

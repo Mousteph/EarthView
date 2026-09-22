@@ -2,8 +2,8 @@
 
 import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useCallback, useState } from "react";
-import { Color } from "three";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { Color, Group } from "three";
 import { readDesignColor } from "@/lib/designTokens";
 import { Earth } from "./Earth";
 import { GeographicLayers } from "./GeographicLayers";
@@ -16,7 +16,7 @@ import {
 } from "./PerformanceDebug";
 
 type GlobeSceneProps = {
-  autoRotate: boolean;
+  readonly autoRotate: boolean;
 };
 
 function RenderScheduler({ active }: { active: boolean }) {
@@ -31,7 +31,12 @@ export function GlobeScene({ autoRotate }: GlobeSceneProps) {
   const debugEnabled = usePerformanceDebugEnabled();
   const [performance, setPerformance] = useState<PerformanceSnapshot | null>(null);
   const [activeLod, setActiveLod] = useState<GeographicLod>("50m");
+  const globeGroup = useRef<Group>(null);
   const handleActiveLodChange = useCallback((lod: GeographicLod) => setActiveLod(lod), []);
+
+  useLayoutEffect(() => {
+    globeGroup.current?.rotation.set(0, -0.18, 0);
+  }, []);
 
   return (
     <>
@@ -44,7 +49,7 @@ export function GlobeScene({ autoRotate }: GlobeSceneProps) {
           scene.background = new Color(readDesignColor("--color-parchment"));
         }}
       >
-        <group rotation={[0, -0.18, 0]}>
+        <group ref={globeGroup}>
           <Earth />
           <GeographicLayers onActiveLodChange={handleActiveLodChange} />
         </group>
