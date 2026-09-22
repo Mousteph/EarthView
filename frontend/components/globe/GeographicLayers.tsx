@@ -3,6 +3,7 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useState } from "react";
 import { FrontSide, LineBasicMaterial, MeshBasicMaterial } from "three";
+import { readDesignColor } from "@/lib/designTokens";
 import { CountryBorders } from "./CountryBorders";
 import {
   createGeographyGeometries,
@@ -25,14 +26,12 @@ export function GeographicLayers({ onActiveLodChange }: GeographicLayersProps) {
   const [geometries, setGeometries] = useState<GeographyGeometries | null>(null);
   const landMaterial = useMemo(
     () => new MeshBasicMaterial({
-      color: "#e5e4e0",
       side: FrontSide,
     }),
     [],
   );
   const borderMaterial = useMemo(() => {
     const material = new LineBasicMaterial({
-      color: "#73726f",
       depthTest: false,
       depthWrite: false,
     });
@@ -73,6 +72,11 @@ export function GeographicLayers({ onActiveLodChange }: GeographicLayersProps) {
       setRequestedLod("50m");
     }
   });
+
+  useEffect(() => {
+    landMaterial.color.set(readDesignColor("--color-parchment"));
+    borderMaterial.color.set(readDesignColor("--color-country-line"));
+  }, [borderMaterial, landMaterial]);
 
   useEffect(() => {
     let isCurrent = true;
