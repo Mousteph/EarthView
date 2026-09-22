@@ -5,6 +5,7 @@ import type { Earthquake } from "@/lib/earthquakes";
 
 type EarthquakeControlsProps = {
   readonly visible: boolean;
+  readonly hasLoaded: boolean;
   readonly isLoading: boolean;
   readonly error: string | null;
   readonly selectedEarthquake: Earthquake | null;
@@ -104,6 +105,7 @@ function EarthquakeDetails({
 
 export function EarthquakeControls({
   visible,
+  hasLoaded,
   isLoading,
   error,
   selectedEarthquake,
@@ -129,11 +131,6 @@ export function EarthquakeControls({
             {isLoading ? "Refreshing" : "Refresh"}
           </button>
         </div>
-        {!isLoading && !error ? (
-          <output className="earthquake-count">
-            {totalEarthquakes} {totalEarthquakes === 1 ? "earthquake" : "earthquakes"}
-          </output>
-        ) : null}
         {error ? <p className="earthquake-status" role="alert">{error}</p> : null}
       </aside>
       {selectedEarthquake ? (
@@ -144,6 +141,14 @@ export function EarthquakeControls({
           detailsRef={detailsRef}
         />
       ) : null}
+      <section className="stage-data-loaded" aria-label="Data loaded">
+        <h2>Data loaded</h2>
+        {visible && hasLoaded ? (
+          <output className="earthquake-count">
+            {totalEarthquakes} {totalEarthquakes === 1 ? "earthquake" : "earthquakes"}
+          </output>
+        ) : null}
+      </section>
     </>
   );
 }

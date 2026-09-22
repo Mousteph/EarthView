@@ -152,22 +152,6 @@ body {
   font-weight: 500;
 }
 
-.earthquake-actions button:first-child::after {
-  position: absolute;
-  right: 0;
-  bottom: -13px;
-  left: 0;
-  height: 1px;
-  background: var(--color-ink);
-  content: "";
-  transform: scaleX(0);
-  transform-origin: left;
-}
-
-.earthquake-actions button:first-child[aria-pressed="true"]::after {
-  transform: scaleX(1);
-}
-
 .earthquake-actions button:first-child[aria-pressed="true"] {
   font-weight: 700;
 }
@@ -188,6 +172,25 @@ body {
   color: color-mix(in srgb, var(--color-ink) 62%, transparent);
   font: 10px/1 var(--font-family-sans);
   letter-spacing: 0.16em;
+}
+
+.stage-data-loaded {
+  position: absolute;
+  z-index: 0;
+  top: clamp(250px, 40vh, 470px);
+  left: 48px;
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  color: color-mix(in srgb, var(--color-ink) 68%, transparent);
+  text-transform: uppercase;
+}
+
+.stage-data-loaded h2 {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
 }
 
 .earthquake-connector {
@@ -355,6 +358,11 @@ body {
     left: 24px;
     bottom: 26px;
     font-size: clamp(48px, 17vw, 76px);
+  }
+
+  .stage-data-loaded {
+    top: 36vh;
+    left: 19px;
   }
 
   .stage-footer {
