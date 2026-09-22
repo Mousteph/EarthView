@@ -2,7 +2,7 @@
 
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useRef, useState } from "react";
-import type { BufferGeometry, Material, Texture } from "three";
+import type { BufferGeometry, Material } from "three";
 
 export type PerformanceSnapshot = {
   fps: number;
@@ -59,7 +59,6 @@ export function PerformanceProbe({ activeLod, onSample }: PerformanceProbeProps)
 
     const geometries = new Set<BufferGeometry>();
     const materials = new Set<Material>();
-    const textures = new Set<Texture>();
     let objects = 0;
     let vertices = 0;
 
@@ -73,11 +72,6 @@ export function PerformanceProbe({ activeLod, onSample }: PerformanceProbeProps)
       for (const material of objectMaterials) {
         if (!material) continue;
         materials.add(material);
-        for (const value of Object.values(material)) {
-          if (value && typeof value === "object" && (value as Texture).isTexture) {
-            textures.add(value as Texture);
-          }
-        }
       }
     });
 
@@ -115,7 +109,7 @@ export function PerformanceProbe({ activeLod, onSample }: PerformanceProbeProps)
   return null;
 }
 
-export function PerformancePanel({ snapshot }: { snapshot: PerformanceSnapshot | null }) {
+export function PerformancePanel({ snapshot }: { readonly snapshot: PerformanceSnapshot | null }) {
   if (!snapshot) return null;
 
   return (

@@ -45,12 +45,9 @@ body {
 .stage-overlay {
   position: absolute;
   inset: 0;
-  pointer-events: none;
-}
-
-.stage-overlay {
   overflow: hidden;
   color: var(--color-ink);
+  pointer-events: none;
   text-transform: uppercase;
 }
 
