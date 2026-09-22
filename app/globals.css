@@ -34,6 +34,20 @@ body {
   display: block;
 }
 
+.performance-debug {
+  position: fixed;
+  z-index: 10;
+  top: 64px;
+  right: 30px;
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  background: rgb(10 45 45 / 88%);
+  color: #e5e4e0;
+  font: 10px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace;
+  pointer-events: none;
+}
+
 .stage-overlay {
   position: absolute;
   inset: 0;
