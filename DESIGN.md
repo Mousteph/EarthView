@@ -23,6 +23,8 @@ Keep the stage free of decorative concentric circles so the globe and geographic
 
 ## Globe
 
-Use the locally bundled official Natural Earth 1:10m Admin-0 country polygons as the single source for both land and country outlines. Densify each ring once, then reuse those exact vertices for the triangulated land edge and its border so both layers remain aligned at close zoom. Keep the ocean, land, and border meshes separate. The ocean is at `1.0`; land and borders share radius `1.0015`, with a depth-only polygon offset on the land preventing flicker without moving either layer. Border materials never write depth.
+Use the locally bundled official Natural Earth Admin-0 country polygons as the single source for both land and country outlines. Use 1:50m in the global view and switch to 1:10m for close inspection. Densify each ring once, then reuse those exact vertices for the triangulated land edge and its border so both layers remain aligned at close zoom. Keep the ocean, land, and border meshes separate. The ocean is at `1.0`; land and borders share radius `1.0015`. That physical separation prevents ocean/land z-fighting without a slope-based polygon offset, which is unstable near the globe limb. Borders never write depth and render only on the camera-facing hemisphere.
+
+The LOD transition enters 1:10m below camera distance `2.15` and returns to 1:50m above `2.45`. This hysteresis is intentional. Geographic triangles must be wound outward and remain front-sided; border fragments are clipped to the camera-facing hemisphere to prevent rear geometry leaking around the limb.
 
 The globe begins with a slow automatic rotation. Any touch, drag, or scroll stops that rotation. Orbit interaction uses low drag and zoom sensitivity, remains damped, and permits precise inspection just above the globe surface without camera clipping.
