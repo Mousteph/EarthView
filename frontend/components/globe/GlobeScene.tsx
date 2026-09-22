@@ -6,7 +6,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { Group } from "three";
 import type { Earthquake } from "@/lib/earthquakes";
 import { Earth } from "./Earth";
-import { EarthquakeLayer } from "./EarthquakeLayer";
+import { EarthquakeLayer, type SelectedEarthquakeScreenPosition } from "./EarthquakeLayer";
 import { GeographicLayers } from "./GeographicLayers";
 import type { GeographicLod } from "./geography";
 import {
@@ -22,6 +22,7 @@ type GlobeSceneProps = {
   readonly earthquakesVisible: boolean;
   readonly selectedEarthquakeId: string | null;
   readonly onEarthquakeSelect: (earthquakeId: string) => void;
+  readonly onSelectedEarthquakePositionChange: (position: SelectedEarthquakeScreenPosition | null) => void;
 };
 
 function RenderScheduler({ active }: { active: boolean }) {
@@ -38,6 +39,7 @@ export function GlobeScene({
   earthquakesVisible,
   selectedEarthquakeId,
   onEarthquakeSelect,
+  onSelectedEarthquakePositionChange,
 }: GlobeSceneProps) {
   const debugEnabled = usePerformanceDebugEnabled();
   const [performance, setPerformance] = useState<PerformanceSnapshot | null>(null);
@@ -65,6 +67,7 @@ export function GlobeScene({
             selectedEarthquakeId={selectedEarthquakeId}
             visible={earthquakesVisible}
             onSelect={onEarthquakeSelect}
+            onSelectedPositionChange={onSelectedEarthquakePositionChange}
           />
         </group>
         <OrbitControls

@@ -1,18 +1,26 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { EarthquakeControls } from "@/components/earthquakes/EarthquakeControls";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { EarthquakeControls, EarthquakeHeader } from "@/components/earthquakes/EarthquakeControls";
 import { GlobeScene } from "@/components/globe/GlobeScene";
+import type { SelectedEarthquakeScreenPosition } from "@/components/globe/EarthquakeLayer";
 import { useEarthquakes } from "@/lib/earthquakes";
 
 export default function Home() {
   const [hasInteracted, setHasInteracted] = useState(false);
   const [earthquakesVisible, setEarthquakesVisible] = useState(false);
   const [selectedEarthquakeId, setSelectedEarthquakeId] = useState<string | null>(null);
+  const connectorRef = useRef<SVGSVGElement>(null);
+  const connectorPathRef = useRef<SVGPathElement>(null);
+  const connectorRingRef = useRef<SVGCircleElement>(null);
+  const detailsRef = useRef<HTMLElement>(null);
   const { earthquakes, isLoading, error, refresh } = useEarthquakes();
   const selectedEarthquake = useMemo(
     () => earthquakes.find((earthquake) => earthquake.id === selectedEarthquakeId) ?? null,
     [earthquakes, selectedEarthquakeId],
+  );
+  const selectedEarthquakeIndex = earthquakes.findIndex(
+    (earthquake) => earthquake.id === selectedEarthquakeId,
   );
 
   const toggleEarthquakes = () => {
@@ -31,6 +39,31 @@ export default function Home() {
     }
   };
 
+  const updateSelectedEarthquakeConnector = useCallback((position: SelectedEarthquakeScreenPosition | null) => {
+    const connector = connectorRef.current;
+    const path = connectorPathRef.current;
+    const ring = connectorRingRef.current;
+    const details = detailsRef.current;
+    if (!connector || !path || !ring || !details || !position) {
+      connector?.style.setProperty("opacity", "0");
+      return;
+    }
+
+    const panel = details.getBoundingClientRect();
+    const panelBelowMarker = panel.top > position.y;
+    const targetX = panelBelowMarker ? panel.left + panel.width * 0.5 : panel.left;
+    const targetY = panelBelowMarker ? panel.top : panel.top + 24;
+    const direction = Math.sign(targetX - position.x) || 1;
+    const firstBendX = position.x + direction * Math.min(110, Math.abs(targetX - position.x) * 0.4);
+    const finalBendX = targetX - direction * Math.min(46, Math.abs(targetX - position.x) * 0.16);
+
+    connector.setAttribute("viewBox", `0 0 ${position.width} ${position.height}`);
+    path.setAttribute("d", `M ${position.x} ${position.y} H ${firstBendX} L ${finalBendX} ${targetY} H ${targetX}`);
+    ring.setAttribute("cx", String(position.x));
+    ring.setAttribute("cy", String(position.y));
+    connector.style.setProperty("opacity", "1");
+  }, []);
+
   return (
     <main
       aria-label="Interactive Earth globe"
@@ -46,18 +79,23 @@ export default function Home() {
           earthquakesVisible={earthquakesVisible}
           selectedEarthquakeId={selectedEarthquakeId}
           onEarthquakeSelect={setSelectedEarthquakeId}
+          onSelectedEarthquakePositionChange={updateSelectedEarthquakeConnector}
         />
       </div>
-      <div className="stage-overlay" aria-hidden="true">
-        <div className="stage-wordmark">EarthView</div>
-        <div className="stage-context">Earth observation / 001</div>
-        <div className="stage-footer">Explore by touch or scroll</div>
-      </div>
+      <svg className="earthquake-connector" ref={connectorRef} aria-hidden="true">
+        <path ref={connectorPathRef} />
+        <circle ref={connectorRingRef} r="16" />
+      </svg>
+      <EarthquakeHeader />
+      <div className="stage-footer" aria-hidden="true">Explore by touch or scroll</div>
       <EarthquakeControls
         visible={earthquakesVisible}
         isLoading={isLoading}
         error={error}
         selectedEarthquake={selectedEarthquake}
+        selectedEarthquakeIndex={selectedEarthquakeIndex}
+        totalEarthquakes={earthquakes.length}
+        detailsRef={detailsRef}
         onToggle={toggleEarthquakes}
         onRefresh={() => void refreshEarthquakes()}
       />
