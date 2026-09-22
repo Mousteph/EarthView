@@ -1,0 +1,106 @@
+:root {
+  color-scheme: light;
+  background: #e5e4e0;
+  --parchment: #e5e4e0;
+  --ink: #1d1d1d;
+  --ash: #bfbebe;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+  background: var(--parchment);
+  color: var(--ink);
+  font-family: Inter, "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+.earthview {
+  width: 100dvw;
+  height: 100dvh;
+  touch-action: none;
+}
+
+.earthview canvas {
+  display: block;
+}
+
+.stage-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.stage-overlay {
+  overflow: hidden;
+  color: var(--ink);
+  text-transform: uppercase;
+}
+
+.stage-wordmark,
+.stage-context,
+.stage-footer {
+  position: absolute;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.stage-wordmark {
+  top: 30px;
+  left: 30px;
+}
+
+.stage-context {
+  top: 30px;
+  right: 30px;
+}
+
+.stage-title {
+  position: absolute;
+  left: clamp(24px, 5vw, 76px);
+  bottom: clamp(28px, 6vw, 76px);
+  font-size: clamp(54px, 9vw, 103px);
+  font-weight: 400;
+  letter-spacing: 0.013em;
+  line-height: 0.8;
+}
+
+.stage-footer {
+  right: 30px;
+  bottom: 30px;
+  color: color-mix(in srgb, var(--ink) 68%, transparent);
+  font-weight: 400;
+}
+
+@media (max-width: 640px) {
+  .stage-wordmark,
+  .stage-context,
+  .stage-footer {
+    font-size: 9px;
+  }
+
+  .stage-wordmark {
+    top: 19px;
+    left: 19px;
+  }
+
+  .stage-context {
+    top: 19px;
+    right: 19px;
+  }
+
+  .stage-footer {
+    right: 19px;
+    bottom: 19px;
+  }
+}
