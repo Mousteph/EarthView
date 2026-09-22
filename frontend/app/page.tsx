@@ -14,7 +14,7 @@ export default function Home() {
   const connectorPathRef = useRef<SVGPathElement>(null);
   const connectorRingRef = useRef<SVGCircleElement>(null);
   const detailsRef = useRef<HTMLElement>(null);
-  const { earthquakes, isLoading, error, refresh } = useEarthquakes();
+  const { earthquakes, hasLoaded, isLoading, error, refresh } = useEarthquakes();
   const selectedEarthquake = useMemo(
     () => earthquakes.find((earthquake) => earthquake.id === selectedEarthquakeId) ?? null,
     [earthquakes, selectedEarthquakeId],
@@ -84,12 +84,13 @@ export default function Home() {
       </div>
       <svg className="earthquake-connector" ref={connectorRef} aria-hidden="true">
         <path ref={connectorPathRef} />
-        <circle ref={connectorRingRef} r="16" />
+        <circle ref={connectorRingRef} r="13" />
       </svg>
       <EarthquakeHeader />
       <div className="stage-footer" aria-hidden="true">Explore by touch or scroll</div>
       <EarthquakeControls
         visible={earthquakesVisible}
+        hasLoaded={hasLoaded}
         isLoading={isLoading}
         error={error}
         selectedEarthquake={selectedEarthquake}

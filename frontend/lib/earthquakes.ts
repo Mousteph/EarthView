@@ -29,6 +29,7 @@ function isEarthquake(value: unknown): value is Earthquake {
 
 export function useEarthquakes() {
   const [earthquakes, setEarthquakes] = useState<readonly Earthquake[]>([]);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
@@ -50,6 +51,7 @@ export function useEarthquakes() {
       if (currentRequest !== requestId.current) return null;
 
       setEarthquakes(payload);
+      setHasLoaded(true);
       return payload;
     } catch (requestError) {
       if (currentRequest === requestId.current) {
@@ -69,5 +71,5 @@ export function useEarthquakes() {
     return () => window.clearTimeout(timer);
   }, [refresh]);
 
-  return { earthquakes, isLoading, error, refresh };
+  return { earthquakes, hasLoaded, isLoading, error, refresh };
 }
