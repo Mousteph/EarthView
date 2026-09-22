@@ -3,10 +3,9 @@
   --color-parchment: #e5e4e0;
   --color-ink: #1d1d1d;
   --color-ash: #bfbebe;
-  --color-petrol: #0a2d2d;
+  --color-ocean-blue: #0b496f;
   --color-country-line: #73726f;
-  --color-debug-panel: rgb(10 45 45 / 88%);
-
+  --color-debug-panel: rgb(11 73 111 / 88%);
   --font-family-sans: Inter, "Helvetica Neue", Helvetica, Arial, sans-serif;
   --font-family-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-size-label: 11px;

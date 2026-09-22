@@ -5,3 +5,4 @@ frontend/.next/
 out/
 graphify-out/
 *.tsbuildinfo
+*_dev.ipynb

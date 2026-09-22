@@ -3,9 +3,10 @@
 import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { Color, Group } from "three";
-import { readDesignColor } from "@/lib/designTokens";
+import { Group } from "three";
+import type { Earthquake } from "@/lib/earthquakes";
 import { Earth } from "./Earth";
+import { EarthquakeLayer } from "./EarthquakeLayer";
 import { GeographicLayers } from "./GeographicLayers";
 import type { GeographicLod } from "./geography";
 import {
@@ -17,6 +18,10 @@ import {
 
 type GlobeSceneProps = {
   readonly autoRotate: boolean;
+  readonly earthquakes: readonly Earthquake[];
+  readonly earthquakesVisible: boolean;
+  readonly selectedEarthquakeId: string | null;
+  readonly onEarthquakeSelect: (earthquakeId: string) => void;
 };
 
 function RenderScheduler({ active }: { active: boolean }) {
@@ -27,7 +32,13 @@ function RenderScheduler({ active }: { active: boolean }) {
   return null;
 }
 
-export function GlobeScene({ autoRotate }: GlobeSceneProps) {
+export function GlobeScene({
+  autoRotate,
+  earthquakes,
+  earthquakesVisible,
+  selectedEarthquakeId,
+  onEarthquakeSelect,
+}: GlobeSceneProps) {
   const debugEnabled = usePerformanceDebugEnabled();
   const [performance, setPerformance] = useState<PerformanceSnapshot | null>(null);
   const [activeLod, setActiveLod] = useState<GeographicLod>("50m");
@@ -41,17 +52,20 @@ export function GlobeScene({ autoRotate }: GlobeSceneProps) {
   return (
     <>
       <Canvas
-        camera={{ fov: 30, near: 0.05, far: 10, position: [0.25, 0.38, 3.75] }}
+        camera={{ fov: 30, near: 0.05, far: 10, position: [0.25, 0.38, 4.2] }}
         dpr={[1, 1.5]}
         frameloop="demand"
-        gl={{ antialias: true, powerPreference: "high-performance" }}
-        onCreated={({ scene }) => {
-          scene.background = new Color(readDesignColor("--color-parchment"));
-        }}
+        gl={{ alpha: true, antialias: true, powerPreference: "high-performance" }}
       >
         <group ref={globeGroup}>
           <Earth />
           <GeographicLayers onActiveLodChange={handleActiveLodChange} />
+          <EarthquakeLayer
+            earthquakes={earthquakes}
+            selectedEarthquakeId={selectedEarthquakeId}
+            visible={earthquakesVisible}
+            onSelect={onEarthquakeSelect}
+          />
         </group>
         <OrbitControls
           autoRotate={autoRotate}
