@@ -9,7 +9,7 @@ EarthView is a quiet editorial instrument: a single interactive globe on a warm 
 - Parchment: `#e5e4e0`
 - Ink: `#1d1d1d`
 - Ash: `#bfbebe`
-- Petrol ocean: `#0a2d2d`
+- Ocean blue: `#0b496f`
 - Land: `#e5e4e0`
 - Country lines: `#73726f`
 

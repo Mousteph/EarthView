@@ -8,7 +8,7 @@ export function Earth() {
   const material = useRef<MeshBasicMaterial>(null);
 
   useEffect(() => {
-    material.current?.color.set(readDesignColor("--color-petrol"));
+    material.current?.color.set(readDesignColor("--color-ocean-blue"));
   }, []);
 
   return (
