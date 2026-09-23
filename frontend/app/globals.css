@@ -73,14 +73,14 @@ body {
 }
 
 .stage-header,
-.earthquake-controls,
-.earthquake-details {
+.layer-controls,
+.event-details {
   isolation: isolate;
 }
 
 .stage-header::before,
-.earthquake-controls::before,
-.earthquake-details::before {
+.layer-controls::before,
+.event-details::before {
   position: absolute;
   z-index: -1;
   inset: -22px -28px;
@@ -105,12 +105,12 @@ body {
   background: color-mix(in srgb, var(--color-ink) 45%, transparent);
 }
 
-.earthquake-clock {
+.utc-clock {
   color: color-mix(in srgb, var(--color-ink) 68%, transparent);
   font: inherit;
 }
 
-.earthquake-controls {
+.layer-controls {
   position: absolute;
   z-index: 10;
   top: clamp(118px, 14vh, 158px);
@@ -124,20 +124,25 @@ body {
   text-transform: uppercase;
 }
 
-.earthquake-status,
-.earthquake-details-heading,
-.earthquake-details dt {
+.layer-status,
+.event-details-heading,
+.event-details dt {
   font-size: 11px;
   letter-spacing: 0.18em;
 }
 
-.earthquake-actions {
+.layer-actions {
   display: flex;
   align-items: center;
   gap: 28px;
 }
 
-.earthquake-actions button {
+.layer-row {
+  display: grid;
+  gap: 8px;
+}
+
+.layer-actions button {
   border: 0;
   padding: 0;
   background: transparent;
@@ -147,21 +152,21 @@ body {
   text-transform: uppercase;
 }
 
-.earthquake-actions button:first-child {
+.layer-actions button:first-child {
   position: relative;
   font-weight: 500;
 }
 
-.earthquake-actions button:first-child[aria-pressed="true"] {
+.layer-actions button:first-child[aria-pressed="true"] {
   font-weight: 700;
 }
 
-.earthquake-actions button:disabled {
+.layer-actions button:disabled {
   cursor: wait;
   opacity: 0.5;
 }
 
-.earthquake-status {
+.layer-status {
   max-width: 300px;
   margin: 0;
   color: #a03d2b;
@@ -169,6 +174,7 @@ body {
 }
 
 .earthquake-count,
+.layer-count,
 .data-source {
   color: color-mix(in srgb, var(--color-ink) 62%, transparent);
   font: 10px/1 var(--font-family-sans);
@@ -203,7 +209,7 @@ body {
   letter-spacing: 0.22em;
 }
 
-.earthquake-connector {
+.event-connector {
   position: absolute;
   z-index: 5;
   inset: 0;
@@ -215,21 +221,21 @@ body {
   transition: opacity 140ms ease-out;
 }
 
-.earthquake-connector path,
-.earthquake-connector circle {
+.event-connector path,
+.event-connector circle {
   fill: none;
   stroke: color-mix(in srgb, var(--color-ink) 46%, transparent);
 }
 
-.earthquake-connector path {
+.event-connector path {
   stroke-width: 1;
 }
 
-.earthquake-connector circle {
+.event-connector circle {
   stroke-width: 1.25;
 }
 
-.earthquake-details {
+.event-details {
   position: absolute;
   z-index: 10;
   top: clamp(146px, 17vh, 202px);
@@ -238,7 +244,7 @@ body {
   text-align: left;
 }
 
-.earthquake-details-heading {
+.event-details-heading {
   display: flex;
   justify-content: space-between;
   margin-bottom: 20px;
@@ -247,46 +253,51 @@ body {
   text-transform: uppercase;
 }
 
-.earthquake-primary {
+.event-primary {
   border-bottom: 1px solid color-mix(in srgb, var(--color-ink) 38%, transparent);
   padding-bottom: 20px;
 }
 
-.earthquake-primary div {
+.event-primary div {
   font-size: clamp(54px, 5vw, 70px);
   font-weight: 500;
   letter-spacing: -0.04em;
   line-height: 0.9;
 }
 
-.earthquake-primary p {
+.event-primary p {
   margin: 14px 0 0;
   font-size: 20px;
   line-height: 1.2;
 }
 
-.earthquake-details dl {
+.event-primary .fire-primary-label {
+  font-size: clamp(32px, 3.5vw, 52px);
+  letter-spacing: -0.025em;
+}
+
+.event-details dl {
   display: grid;
   gap: 13px;
   margin: 20px 0 0;
 }
 
-.earthquake-details dl > div {
+.event-details dl > div {
   display: grid;
   grid-template-columns: 94px 1fr;
   gap: 18px;
 }
 
-.earthquake-details dt,
-.earthquake-details dd {
+.event-details dt,
+.event-details dd {
   margin: 0;
 }
 
-.earthquake-details dt {
+.event-details dt {
   color: color-mix(in srgb, var(--color-ink) 62%, transparent);
 }
 
-.earthquake-details dd {
+.event-details dd {
   font-size: 11px;
   letter-spacing: 0.08em;
   line-height: 1.35;
@@ -338,17 +349,17 @@ body {
     display: none;
   }
 
-  .earthquake-controls {
+  .layer-controls {
     top: 86px;
     left: 19px;
     max-width: calc(100vw - 38px);
   }
 
-  .earthquake-actions {
+  .layer-actions {
     gap: 16px;
   }
 
-  .earthquake-details {
+  .event-details {
     top: auto;
     right: 19px;
     bottom: 62px;
@@ -356,11 +367,11 @@ body {
     width: auto;
   }
 
-  .earthquake-primary div {
+  .event-primary div {
     font-size: 46px;
   }
 
-  .earthquake-primary p {
+  .event-primary p {
     font-size: 16px;
   }
 

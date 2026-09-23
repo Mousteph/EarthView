@@ -1,45 +1,74 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { EarthquakeControls, EarthquakeHeader } from "@/components/earthquakes/EarthquakeControls";
+import { EarthViewHeader, LayerControls, type LayerControl, type SelectedEvent } from "@/components/data/LayerControls";
 import { GlobeScene } from "@/components/globe/GlobeScene";
-import type { SelectedEarthquakeScreenPosition } from "@/components/globe/EarthquakeLayer";
+import type { SelectedPointScreenPosition } from "@/components/globe/PointLayer";
 import { useEarthquakes } from "@/lib/earthquakes";
+import { useFires } from "@/lib/fires";
 
 export default function Home() {
   const [hasInteracted, setHasInteracted] = useState(false);
   const [earthquakesVisible, setEarthquakesVisible] = useState(false);
-  const [selectedEarthquakeId, setSelectedEarthquakeId] = useState<string | null>(null);
+  const [firesVisible, setFiresVisible] = useState(false);
+  const [selection, setSelection] = useState<{ type: "earthquakes" | "fires"; id: string } | null>(null);
   const connectorRef = useRef<SVGSVGElement>(null);
   const connectorPathRef = useRef<SVGPathElement>(null);
   const connectorRingRef = useRef<SVGCircleElement>(null);
   const detailsRef = useRef<HTMLElement>(null);
-  const { earthquakes, hasLoaded, isLoading, error, refresh } = useEarthquakes();
-  const selectedEarthquake = useMemo(
-    () => earthquakes.find((earthquake) => earthquake.id === selectedEarthquakeId) ?? null,
-    [earthquakes, selectedEarthquakeId],
-  );
-  const selectedEarthquakeIndex = earthquakes.findIndex(
-    (earthquake) => earthquake.id === selectedEarthquakeId,
-  );
+  const earthquakesData = useEarthquakes();
+  const firesData = useFires();
+  const { earthquakes } = earthquakesData;
+  const { fires } = firesData;
+  const selected = useMemo((): SelectedEvent | null => {
+    if (!selection) return null;
+    if (selection.type === "earthquakes") {
+      const index = earthquakes.findIndex((event) => event.id === selection.id);
+      return index < 0 ? null : { type: "earthquakes", event: earthquakes[index], index, total: earthquakes.length };
+    }
+    const index = fires.findIndex((event) => event.id === selection.id);
+    return index < 0 ? null : { type: "fires", event: fires[index], index, total: fires.length };
+  }, [earthquakes, fires, selection]);
 
   const toggleEarthquakes = () => {
-    if (earthquakesVisible) setSelectedEarthquakeId(null);
+    if (earthquakesVisible && selection?.type === "earthquakes") setSelection(null);
     setEarthquakesVisible((visible) => !visible);
   };
 
+  const toggleFires = () => {
+    if (firesVisible && selection?.type === "fires") setSelection(null);
+    if (!firesVisible && !firesData.hasLoaded && !firesData.isLoading) void firesData.refresh();
+    setFiresVisible((visible) => !visible);
+  };
+
   const refreshEarthquakes = async () => {
-    const updatedEarthquakes = await refresh();
+    const updatedEarthquakes = await earthquakesData.refresh();
     if (
       updatedEarthquakes
-      && selectedEarthquakeId
-      && !updatedEarthquakes.some((earthquake) => earthquake.id === selectedEarthquakeId)
+      && selection?.type === "earthquakes"
+      && !updatedEarthquakes.some((earthquake) => earthquake.id === selection.id)
     ) {
-      setSelectedEarthquakeId(null);
+      setSelection((current) => current?.type === "earthquakes" && current.id === selection.id ? null : current);
     }
   };
 
-  const updateSelectedEarthquakeConnector = useCallback((position: SelectedEarthquakeScreenPosition | null) => {
+  const refreshFires = async () => {
+    const updatedFires = await firesData.refresh();
+    if (updatedFires && selection?.type === "fires" && !updatedFires.some((fire) => fire.id === selection.id)) {
+      setSelection((current) => current?.type === "fires" && current.id === selection.id ? null : current);
+    }
+  };
+
+  const layers: LayerControl[] = [
+    { id: "earthquakes", label: "Earthquakes", countLabel: "earthquake", visible: earthquakesVisible,
+      hasLoaded: earthquakesData.hasLoaded, isLoading: earthquakesData.isLoading, error: earthquakesData.error,
+      count: earthquakes.length, onToggle: toggleEarthquakes, onRefresh: () => void refreshEarthquakes() },
+    { id: "fires", label: "Active Fires", countLabel: "active fire", visible: firesVisible,
+      hasLoaded: firesData.hasLoaded, isLoading: firesData.isLoading, error: firesData.error,
+      count: fires.length, onToggle: toggleFires, onRefresh: () => void refreshFires() },
+  ];
+
+  const updateSelectedConnector = useCallback((position: SelectedPointScreenPosition | null) => {
     const connector = connectorRef.current;
     const path = connectorPathRef.current;
     const ring = connectorRingRef.current;
@@ -77,29 +106,22 @@ export default function Home() {
           autoRotate={!hasInteracted}
           earthquakes={earthquakes}
           earthquakesVisible={earthquakesVisible}
-          selectedEarthquakeId={selectedEarthquakeId}
-          onEarthquakeSelect={setSelectedEarthquakeId}
-          onSelectedEarthquakePositionChange={updateSelectedEarthquakeConnector}
+          selectedEarthquakeId={selection?.type === "earthquakes" ? selection.id : null}
+          fires={fires}
+          firesVisible={firesVisible}
+          selectedFireId={selection?.type === "fires" ? selection.id : null}
+          onEarthquakeSelect={(id) => setSelection({ type: "earthquakes", id })}
+          onFireSelect={(id) => setSelection({ type: "fires", id })}
+          onSelectedPositionChange={updateSelectedConnector}
         />
       </div>
-      <svg className="earthquake-connector" ref={connectorRef} aria-hidden="true">
+      <svg className="event-connector" ref={connectorRef} aria-hidden="true">
         <path ref={connectorPathRef} />
         <circle ref={connectorRingRef} r="13" />
       </svg>
-      <EarthquakeHeader />
+      <EarthViewHeader />
       <div className="stage-footer" aria-hidden="true">Explore by touch or scroll</div>
-      <EarthquakeControls
-        visible={earthquakesVisible}
-        hasLoaded={hasLoaded}
-        isLoading={isLoading}
-        error={error}
-        selectedEarthquake={selectedEarthquake}
-        selectedEarthquakeIndex={selectedEarthquakeIndex}
-        totalEarthquakes={earthquakes.length}
-        detailsRef={detailsRef}
-        onToggle={toggleEarthquakes}
-        onRefresh={() => void refreshEarthquakes()}
-      />
+      <LayerControls layers={layers} selected={selected} detailsRef={detailsRef} />
     </main>
   );
 }
