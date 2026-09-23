@@ -12,18 +12,20 @@ import {
   type Raycaster,
   Vector3,
 } from "three";
-import type { Earthquake } from "@/lib/earthquakes";
+import type { GeoEvent } from "@/lib/dataLayer";
 import { geoToVector3 } from "@/lib/geo";
 
-type EarthquakeLayerProps = {
-  readonly earthquakes: readonly Earthquake[];
-  readonly selectedEarthquakeId: string | null;
+type PointLayerProps<T extends GeoEvent> = {
+  readonly entities: readonly T[];
+  readonly selectedId: string | null;
   readonly visible: boolean;
-  readonly onSelect: (earthquakeId: string) => void;
-  readonly onSelectedPositionChange: (position: SelectedEarthquakeScreenPosition | null) => void;
+  readonly color: string;
+  readonly sizeFor: (entity: T) => number;
+  readonly onSelect: (id: string) => void;
+  readonly onSelectedPositionChange: (position: SelectedPointScreenPosition | null) => void;
 };
 
-export type SelectedEarthquakeScreenPosition = {
+export type SelectedPointScreenPosition = {
   readonly x: number;
   readonly y: number;
   readonly width: number;
@@ -33,19 +35,15 @@ export type SelectedEarthquakeScreenPosition = {
 const markerRadius = 1.012;
 const pickingThreshold = 0.014;
 
-function magnitudeToScale(magnitude: number) {
-  return Math.min(3, Math.max(0.75, 0.75 + Math.max(0, magnitude) * 0.35));
-}
-
 function createPointGeometry(points: readonly Vector3[], sizes?: readonly number[]) {
   const geometry = new BufferGeometry();
   geometry.setFromPoints([...points]);
-  if (sizes) geometry.setAttribute("magnitudeSize", new Float32BufferAttribute(sizes, 1));
+  if (sizes) geometry.setAttribute("markerSize", new Float32BufferAttribute(sizes, 1));
   geometry.computeBoundingSphere();
   return geometry;
 }
 
-function raycastEarthquakes(
+function raycastPoints(
   this: Points,
   raycaster: Raycaster,
   intersections: Intersection[],
@@ -59,20 +57,24 @@ function raycastEarthquakes(
     raycaster.params.Points.threshold = previousThreshold;
   }
 
-  candidates.sort(
+  const cameraPosition = raycaster.ray.origin;
+  const visibleCandidates = candidates.filter((candidate) =>
+    candidate.point.clone().normalize().dot(cameraPosition.clone().sub(candidate.point)) > 0,
+  );
+  visibleCandidates.sort(
     (left, right) => (left.distanceToRay ?? Infinity) - (right.distanceToRay ?? Infinity),
   );
-  if (candidates[0]) intersections.push(candidates[0]);
+  if (visibleCandidates[0]) intersections.push(visibleCandidates[0]);
 }
 
-function SelectedEarthquakeProjection({
+function SelectedPointProjection({
   layer,
   position,
   onChange,
 }: {
   readonly layer: RefObject<Group | null>;
   readonly position: Vector3;
-  readonly onChange: (position: SelectedEarthquakeScreenPosition | null) => void;
+  readonly onChange: (position: SelectedPointScreenPosition | null) => void;
 }) {
   const worldPosition = useMemo(() => new Vector3(), []);
   const cameraPosition = useMemo(() => new Vector3(), []);
@@ -119,25 +121,27 @@ function SelectedEarthquakeProjection({
   return null;
 }
 
-export function EarthquakeLayer({
-  earthquakes,
-  selectedEarthquakeId,
+export function PointLayer<T extends GeoEvent>({
+  entities,
+  selectedId,
   visible,
+  color,
+  sizeFor,
   onSelect,
   onSelectedPositionChange,
-}: EarthquakeLayerProps) {
+}: PointLayerProps<T>) {
   const invalidate = useThree((state) => state.invalidate);
   const layer = useRef<Group>(null);
   const positions = useMemo(
-    () => earthquakes.map((earthquake) => geoToVector3([earthquake.lon, earthquake.lat], markerRadius)),
-    [earthquakes],
+    () => entities.map((entity) => geoToVector3([entity.lon, entity.lat], markerRadius)),
+    [entities],
   );
   const sizes = useMemo(
-    () => earthquakes.map((earthquake) => magnitudeToScale(earthquake.magnitude)),
-    [earthquakes],
+    () => entities.map(sizeFor),
+    [entities, sizeFor],
   );
   const geometry = useMemo(() => createPointGeometry(positions, sizes), [positions, sizes]);
-  const selectedIndex = earthquakes.findIndex((earthquake) => earthquake.id === selectedEarthquakeId);
+  const selectedIndex = entities.findIndex((entity) => entity.id === selectedId);
   const selectedGeometry = useMemo(
     () => selectedIndex < 0 ? null : createPointGeometry([positions[selectedIndex]], [sizes[selectedIndex]]),
     [positions, selectedIndex, sizes],
@@ -145,7 +149,7 @@ export function EarthquakeLayer({
   const markerMaterial = useMemo(
     () => {
       const material = new PointsMaterial({
-        color: "#c5523b",
+        color,
         depthWrite: false,
         size: 4,
         sizeAttenuation: false,
@@ -154,13 +158,13 @@ export function EarthquakeLayer({
       });
       material.onBeforeCompile = (shader) => {
         shader.vertexShader = shader.vertexShader
-          .replace("#include <common>", "#include <common>\nattribute float magnitudeSize;")
-          .replace("gl_PointSize = size;", "gl_PointSize = magnitudeSize * size;");
+          .replace("#include <common>", "#include <common>\nattribute float markerSize;")
+          .replace("gl_PointSize = size;", "gl_PointSize = markerSize * size;");
       };
-      material.customProgramCacheKey = () => "earthview-earthquake-magnitude-points-v1";
+      material.customProgramCacheKey = () => "earthview-data-points-v1";
       return material;
     },
-    [],
+    [color],
   );
   const selectedMaterial = useMemo(
     () => {
@@ -172,10 +176,10 @@ export function EarthquakeLayer({
       });
       material.onBeforeCompile = (shader) => {
         shader.vertexShader = shader.vertexShader
-          .replace("#include <common>", "#include <common>\nattribute float magnitudeSize;")
-          .replace("gl_PointSize = size;", "gl_PointSize = magnitudeSize * size;");
+          .replace("#include <common>", "#include <common>\nattribute float markerSize;")
+          .replace("gl_PointSize = size;", "gl_PointSize = markerSize * size;");
       };
-      material.customProgramCacheKey = () => "earthview-selected-earthquake-points-v1";
+      material.customProgramCacheKey = () => "earthview-selected-data-points-v1";
       return material;
     },
     [],
@@ -197,7 +201,7 @@ export function EarthquakeLayer({
   const handleClick = (event: ThreeEvent<MouseEvent>) => {
     if (event.index === undefined) return;
     event.stopPropagation();
-    onSelect(earthquakes[event.index].id);
+    onSelect(entities[event.index].id);
   };
 
   return (
@@ -205,13 +209,13 @@ export function EarthquakeLayer({
       <points
         geometry={geometry}
         material={markerMaterial}
-        raycast={raycastEarthquakes}
+        raycast={raycastPoints}
         onClick={handleClick}
         renderOrder={2}
       />
       {selectedGeometry ? <points geometry={selectedGeometry} material={selectedMaterial} raycast={() => null} renderOrder={3} /> : null}
       {selectedGeometry ? (
-        <SelectedEarthquakeProjection
+        <SelectedPointProjection
           layer={layer}
           position={positions[selectedIndex]}
           onChange={onSelectedPositionChange}

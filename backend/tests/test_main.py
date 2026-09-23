@@ -3,7 +3,8 @@ from fastapi.testclient import TestClient
 from unittest import TestCase
 from unittest.mock import AsyncMock, patch
 
-from app.main import Earthquake, app, normalize_earthquake
+from app.data_layer.earthquakes import Earthquake, normalize_earthquake
+from app.main import app
 
 
 class NormalizeEarthquakeTests(TestCase):

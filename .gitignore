@@ -6,3 +6,6 @@ out/
 graphify-out/
 *.tsbuildinfo
 *_dev.ipynb
+/config.yaml
+.vscode/
+.DS_Store
