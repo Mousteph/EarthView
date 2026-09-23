@@ -84,6 +84,17 @@ export function loadPreparedGeography(lod: GeographicLod) {
 export function createGeographyGeometries(prepared: PreparedGeography) {
   const land = new BufferGeometry();
   land.setAttribute("position", new Float32BufferAttribute(prepared.landPositions, 3));
+  const normals = new Float32Array(prepared.landPositions.length);
+  for (let index = 0; index < normals.length; index += 3) {
+    const x = prepared.landPositions[index];
+    const y = prepared.landPositions[index + 1];
+    const z = prepared.landPositions[index + 2];
+    const length = Math.hypot(x, y, z);
+    normals[index] = x / length;
+    normals[index + 1] = y / length;
+    normals[index + 2] = z / length;
+  }
+  land.setAttribute("normal", new Float32BufferAttribute(normals, 3));
   land.setIndex(new Uint32BufferAttribute(prepared.landIndices, 1));
   land.boundingSphere = geographyBounds.clone();
 
