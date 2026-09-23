@@ -9,3 +9,4 @@ graphify-out/
 /config.yaml
 .vscode/
 .DS_Store
+__pycache__/
