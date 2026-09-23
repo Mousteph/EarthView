@@ -26,6 +26,6 @@ function isEarthquake(value: unknown): value is Earthquake {
 }
 
 export function useEarthquakes() {
-  const { entities, ...state } = useDataLayer("/api/earthquakes", "Earthquake", isEarthquake);
+  const { entities, ...state } = useDataLayer("/api/earthquakes", "Earthquake", isEarthquake, false);
   return { earthquakes: entities, ...state };
 }

@@ -71,7 +71,7 @@ export function GeographicLayers({ onActiveLodChange, reliefTexture }: Geographi
   });
 
   useEffect(() => {
-    landMaterial.color.set(readDesignColor("--color-parchment"));
+    landMaterial.color.set(readDesignColor("--color-land"));
     borderMaterial.color.set(readDesignColor("--color-country-line"));
   }, [borderMaterial, landMaterial]);
 
