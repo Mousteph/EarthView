@@ -159,6 +159,17 @@ When making architectural changes, explain the reasoning before modifying large 
 
 Before changing visual direction, globe treatment, or interaction polish, consult `DESIGN.md`. It defines the implemented EarthView editorial system and the Natural Earth source policy.
 
+# Model Routing
+
+Optimize for quality while minimizing token cost.
+
+* Use **GPT6 Luna by default** for well-scoped implementation tasks, repetitive edits, simple refactors, tests, documentation, UI adjustments, and changes that follow an existing pattern.
+* Escalate to **GPT6 Sol** only when the task requires architecture decisions, significant cross-file reasoning, ambiguous requirements, difficult debugging, performance-sensitive changes, complex integration, or a final review of important work.
+* Do not use GPT6 Sol for work that GPT6 Luna can complete reliably.
+* When possible, use **GPT6 Sol to plan or review** and **GPT6 Luna to execute** the clearly defined subtasks.
+* If GPT6 Luna becomes uncertain, starts making broad assumptions, or fails repeatedly, escalate that specific task to GPT6 Sol rather than restarting the entire workflow with GPT6 Sol.
+
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know
