@@ -1,20 +1,22 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { MeshBasicMaterial } from "three";
+import { useEffect, useMemo } from "react";
+import type { Texture } from "three";
 import { readDesignColor } from "@/lib/designTokens";
+import { createReliefMaterial } from "./relief";
 
-export function Earth() {
-  const material = useRef<MeshBasicMaterial>(null);
+export function Earth({ reliefTexture }: { readonly reliefTexture: Texture }) {
+  const material = useMemo(() => createReliefMaterial(reliefTexture, "ocean"), [reliefTexture]);
 
   useEffect(() => {
-    material.current?.color.set(readDesignColor("--color-ocean-blue"));
-  }, []);
+    material.color.set(readDesignColor("--color-ocean-blue"));
+    return () => material.dispose();
+  }, [material]);
 
   return (
     <mesh>
       <sphereGeometry />
-      <meshBasicMaterial ref={material} />
+      <primitive object={material} attach="material" />
     </mesh>
   );
 }

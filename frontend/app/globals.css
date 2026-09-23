@@ -168,10 +168,20 @@ body {
   line-height: 1.4;
 }
 
-.earthquake-count {
+.earthquake-count,
+.data-source {
   color: color-mix(in srgb, var(--color-ink) 62%, transparent);
   font: 10px/1 var(--font-family-sans);
   letter-spacing: 0.16em;
+}
+
+.data-source {
+  text-decoration: none;
+}
+
+.data-source:hover,
+.data-source:focus-visible {
+  text-decoration: underline;
 }
 
 .stage-data-loaded {

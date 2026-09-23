@@ -143,6 +143,9 @@ export function EarthquakeControls({
       ) : null}
       <section className="stage-data-loaded" aria-label="Data loaded">
         <h2>Data loaded</h2>
+        <a className="data-source" href="https://www.gebco.net/data-products-gridded-bathymetry-data/gebco2025-grid">
+          Relief: GEBCO 2025
+        </a>
         {visible && hasLoaded ? (
           <output className="earthquake-count">
             {totalEarthquakes} {totalEarthquakes === 1 ? "earthquake" : "earthquakes"}
