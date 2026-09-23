@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import { EarthViewHeader, LayerControls, type LayerControl, type SelectedEvent } from "@/components/data/LayerControls";
-import { GlobeScene } from "@/components/globe/GlobeScene";
+import { GlobeScene, type MapScale, type ZoomApi } from "@/components/globe/GlobeScene";
 import type { SelectedPointScreenPosition } from "@/components/globe/PointLayer";
 import { useEarthquakes } from "@/lib/earthquakes";
 import { useFires } from "@/lib/fires";
@@ -12,6 +12,11 @@ export default function Home() {
   const [earthquakesVisible, setEarthquakesVisible] = useState(false);
   const [firesVisible, setFiresVisible] = useState(false);
   const [selection, setSelection] = useState<{ type: "earthquakes" | "fires"; id: string } | null>(null);
+  const [zoomApi, setZoomApi] = useState<ZoomApi | null>(null);
+  const [mapScale, setMapScale] = useState<MapScale | null>(null);
+  const handleScaleChange = useCallback((scale: MapScale) => {
+    setMapScale((current) => current && current.distanceKm === scale.distanceKm && Math.abs(current.widthPx - scale.widthPx) < 0.5 ? current : scale);
+  }, []);
   const connectorRef = useRef<SVGSVGElement>(null);
   const connectorPathRef = useRef<SVGPathElement>(null);
   const connectorRingRef = useRef<SVGCircleElement>(null);
@@ -32,6 +37,7 @@ export default function Home() {
 
   const toggleEarthquakes = () => {
     if (earthquakesVisible && selection?.type === "earthquakes") setSelection(null);
+    if (!earthquakesVisible && !earthquakesData.hasLoaded && !earthquakesData.isLoading) void earthquakesData.refresh();
     setEarthquakesVisible((visible) => !visible);
   };
 
@@ -60,10 +66,10 @@ export default function Home() {
   };
 
   const layers: LayerControl[] = [
-    { id: "earthquakes", label: "Earthquakes", countLabel: "earthquake", visible: earthquakesVisible,
+    { id: "earthquakes", label: "Earthquakes", description: "Seismic activity, real time", countLabel: "earthquake", visible: earthquakesVisible,
       hasLoaded: earthquakesData.hasLoaded, isLoading: earthquakesData.isLoading, error: earthquakesData.error,
       count: earthquakes.length, onToggle: toggleEarthquakes, onRefresh: () => void refreshEarthquakes() },
-    { id: "fires", label: "Active Fires", countLabel: "active fire", visible: firesVisible,
+    { id: "fires", label: "Active Fires", description: "Wildfires and thermal hotspots", countLabel: "active fire", visible: firesVisible,
       hasLoaded: firesData.hasLoaded, isLoading: firesData.isLoading, error: firesData.error,
       count: fires.length, onToggle: toggleFires, onRefresh: () => void refreshFires() },
   ];
@@ -100,7 +106,7 @@ export default function Home() {
       onPointerDown={() => setHasInteracted(true)}
       onWheel={() => setHasInteracted(true)}
     >
-      <div className="stage-title stage-title-behind" aria-hidden="true">Earth<br />View</div>
+      <div className="stage-title stage-title-left" aria-hidden="true">Earth<br />View</div>
       <div className="globe-canvas">
         <GlobeScene
           autoRotate={!hasInteracted}
@@ -113,6 +119,8 @@ export default function Home() {
           onEarthquakeSelect={(id) => setSelection({ type: "earthquakes", id })}
           onFireSelect={(id) => setSelection({ type: "fires", id })}
           onSelectedPositionChange={updateSelectedConnector}
+          onZoomApiChange={setZoomApi}
+          onScaleChange={handleScaleChange}
         />
       </div>
       <svg className="event-connector" ref={connectorRef} aria-hidden="true">
@@ -120,8 +128,17 @@ export default function Home() {
         <circle ref={connectorRingRef} r="13" />
       </svg>
       <EarthViewHeader />
-      <div className="stage-footer" aria-hidden="true">Explore by touch or scroll</div>
-      <LayerControls layers={layers} selected={selected} detailsRef={detailsRef} />
+      <LayerControls layers={layers} selected={selected} detailsRef={detailsRef} onClose={() => setSelection(null)} />
+      <div className="map-zoom-controls" aria-label="Map zoom controls">
+        <button type="button" onClick={() => { setHasInteracted(true); zoomApi?.zoomIn(); }} aria-label="Zoom in">+</button>
+        <button type="button" onClick={() => { setHasInteracted(true); zoomApi?.zoomOut(); }} aria-label="Zoom out">−</button>
+      </div>
+      {mapScale ? <div className="map-scale" aria-label={`Scale: ${new Intl.NumberFormat("en-US").format(mapScale.distanceKm)} kilometers`}>
+        <div className="map-scale-labels" style={{ width: `${mapScale.widthPx}px` }}>
+          <span>0</span><span>{new Intl.NumberFormat("en-US").format(mapScale.distanceKm / 2)}</span><span>{new Intl.NumberFormat("en-US").format(mapScale.distanceKm)} km</span>
+        </div>
+        <div className="map-scale-rule" style={{ width: `${mapScale.widthPx}px` }} aria-hidden="true"><i /><i /><i /></div>
+      </div> : null}
     </main>
   );
 }

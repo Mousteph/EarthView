@@ -20,6 +20,7 @@ type PointLayerProps<T extends GeoEvent> = {
   readonly selectedId: string | null;
   readonly visible: boolean;
   readonly color: string;
+  readonly ringed?: boolean;
   readonly sizeFor: (entity: T) => number;
   readonly onSelect: (id: string) => void;
   readonly onSelectedPositionChange: (position: SelectedPointScreenPosition | null) => void;
@@ -126,6 +127,7 @@ export function PointLayer<T extends GeoEvent>({
   selectedId,
   visible,
   color,
+  ringed = false,
   sizeFor,
   onSelect,
   onSelectedPositionChange,
@@ -137,8 +139,8 @@ export function PointLayer<T extends GeoEvent>({
     [entities],
   );
   const sizes = useMemo(
-    () => entities.map(sizeFor),
-    [entities, sizeFor],
+    () => entities.map((entity) => Math.max(sizeFor(entity), ringed ? 1.2 : 1)),
+    [entities, ringed, sizeFor],
   );
   const geometry = useMemo(() => createPointGeometry(positions, sizes), [positions, sizes]);
   const selectedIndex = entities.findIndex((entity) => entity.id === selectedId);
@@ -151,7 +153,7 @@ export function PointLayer<T extends GeoEvent>({
       const material = new PointsMaterial({
         color,
         depthWrite: false,
-        size: 4,
+        size: ringed ? 6.8 : 4.2,
         sizeAttenuation: false,
         transparent: true,
         opacity: 0.9,
@@ -160,29 +162,57 @@ export function PointLayer<T extends GeoEvent>({
         shader.vertexShader = shader.vertexShader
           .replace("#include <common>", "#include <common>\nattribute float markerSize;")
           .replace("gl_PointSize = size;", "gl_PointSize = markerSize * size;");
+        const markerShape = ringed
+          ? `
+            float radius = length(gl_PointCoord - vec2(0.5)) * 2.0;
+            if (radius > 1.0) discard;
+            float center = 1.0 - smoothstep(0.13, 0.17, radius);
+            float outerRing = 1.0 - smoothstep(0.025, 0.055, abs(radius - 0.48));
+            float innerRing = 1.0 - smoothstep(0.025, 0.055, abs(radius - 0.76));
+            diffuseColor.a *= max(center, max(outerRing * 0.72, innerRing * 0.58));`
+          : "if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard;";
+        shader.fragmentShader = shader.fragmentShader.replace(
+          "#include <clipping_planes_fragment>",
+          `#include <clipping_planes_fragment>\n${markerShape}`,
+        );
       };
-      material.customProgramCacheKey = () => "earthview-data-points-v1";
+      material.customProgramCacheKey = () => `earthview-data-points-v2-${ringed}`;
       return material;
     },
-    [color],
+    [color, ringed],
   );
   const selectedMaterial = useMemo(
     () => {
       const material = new PointsMaterial({
-        color: "#000000",
+        color,
         depthWrite: false,
-        size: 4,
+        size: ringed ? 9.5 : 5.5,
         sizeAttenuation: false,
+        transparent: true,
       });
       material.onBeforeCompile = (shader) => {
         shader.vertexShader = shader.vertexShader
           .replace("#include <common>", "#include <common>\nattribute float markerSize;")
           .replace("gl_PointSize = size;", "gl_PointSize = markerSize * size;");
+        const markerShape = ringed
+          ? `
+            float radius = length(gl_PointCoord - vec2(0.5)) * 2.0;
+            if (radius > 1.0) discard;
+            float center = 1.0 - smoothstep(0.11, 0.16, radius);
+            float outerRing = 1.0 - smoothstep(0.025, 0.05, abs(radius - 0.43));
+            float middleRing = 1.0 - smoothstep(0.025, 0.05, abs(radius - 0.7));
+            float innerRing = 1.0 - smoothstep(0.025, 0.05, abs(radius - 0.94));
+            diffuseColor.a *= max(center, max(outerRing, max(middleRing * 0.76, innerRing * 0.58)));`
+          : "if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard;";
+        shader.fragmentShader = shader.fragmentShader.replace(
+          "#include <clipping_planes_fragment>",
+          `#include <clipping_planes_fragment>\n${markerShape}`,
+        );
       };
-      material.customProgramCacheKey = () => "earthview-selected-data-points-v1";
+      material.customProgramCacheKey = () => `earthview-selected-data-points-v2-${ringed}`;
       return material;
     },
-    [],
+    [color, ringed],
   );
 
   useEffect(() => () => geometry.dispose(), [geometry]);

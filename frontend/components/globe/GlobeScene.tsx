@@ -2,8 +2,10 @@
 
 import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useLoader } from "@react-three/fiber";
-import { Suspense, useCallback, useLayoutEffect, useRef, useState } from "react";
-import { Group, TextureLoader } from "three";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { TextureLoader } from "three";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import { useThree } from "@react-three/fiber";
 import type { Earthquake } from "@/lib/earthquakes";
 import type { Fire } from "@/lib/fires";
 import { Earth } from "./Earth";
@@ -29,7 +31,12 @@ type GlobeSceneProps = {
   readonly onEarthquakeSelect: (earthquakeId: string) => void;
   readonly onFireSelect: (fireId: string) => void;
   readonly onSelectedPositionChange: (position: SelectedPointScreenPosition | null) => void;
+  readonly onZoomApiChange: (api: ZoomApi | null) => void;
+  readonly onScaleChange: (scale: MapScale) => void;
 };
+
+export type ZoomApi = { readonly zoomIn: () => void; readonly zoomOut: () => void };
+export type MapScale = { readonly distanceKm: number; readonly widthPx: number };
 
 const earthquakeSize = (earthquake: Earthquake) => Math.min(3, Math.max(0.75, 0.75 + Math.max(0, earthquake.magnitude) * 0.35));
 const fireSize = (fire: Fire) => Math.min(2.2, Math.max(0.75, 0.8 + Math.log1p(fire.frp ?? 0) * 0.22));
@@ -53,6 +60,59 @@ function ReliefSurface({ onActiveLodChange }: { readonly onActiveLodChange: (lod
   );
 }
 
+function niceDistance(value: number) {
+  const magnitude = 10 ** Math.floor(Math.log10(value));
+  const normalized = value / magnitude;
+  return (normalized >= 5 ? 5 : normalized >= 2 ? 2 : 1) * magnitude;
+}
+
+function GlobeControls({
+  autoRotate,
+  onZoomApiChange,
+  onScaleChange,
+}: {
+  readonly autoRotate: boolean;
+  readonly onZoomApiChange: GlobeSceneProps["onZoomApiChange"];
+  readonly onScaleChange: GlobeSceneProps["onScaleChange"];
+}) {
+  const controls = useRef<OrbitControlsImpl>(null);
+  const camera = useThree((state) => state.camera);
+  const size = useThree((state) => state.size);
+  const api = useMemo<ZoomApi>(() => ({
+    zoomIn: () => { controls.current?.dollyIn(1.35); controls.current?.update(); },
+    zoomOut: () => { controls.current?.dollyOut(1.35); controls.current?.update(); },
+  }), []);
+  const updateScale = useCallback(() => {
+    const distance = camera.position.length();
+    const focalPixels = size.height / (2 * Math.tan(("fov" in camera ? camera.fov : 30) * Math.PI / 360));
+    const kmPerPixel = (6371 * Math.max(0.15, distance - 1)) / focalPixels;
+    const distanceKm = niceDistance(kmPerPixel * 190);
+    onScaleChange({ distanceKm, widthPx: distanceKm / kmPerPixel });
+  }, [camera, onScaleChange, size.height]);
+
+  useEffect(() => {
+    onZoomApiChange(api);
+    updateScale();
+    return () => onZoomApiChange(null);
+  }, [api, onZoomApiChange, updateScale]);
+
+  return <OrbitControls
+    ref={controls}
+    onChange={updateScale}
+    autoRotate={autoRotate}
+    autoRotateSpeed={0.16}
+    enablePan={false}
+    enableDamping
+    dampingFactor={0.12}
+    rotateSpeed={0.25}
+    zoomSpeed={0.28}
+    minDistance={1.15}
+    maxDistance={5.25}
+    minPolarAngle={0.35}
+    maxPolarAngle={Math.PI - 0.35}
+  />;
+}
+
 export function GlobeScene({
   autoRotate,
   earthquakes,
@@ -64,26 +124,23 @@ export function GlobeScene({
   onEarthquakeSelect,
   onFireSelect,
   onSelectedPositionChange,
+  onZoomApiChange,
+  onScaleChange,
 }: GlobeSceneProps) {
   const debugEnabled = usePerformanceDebugEnabled();
   const [performance, setPerformance] = useState<PerformanceSnapshot | null>(null);
   const [activeLod, setActiveLod] = useState<GeographicLod>("50m");
-  const globeGroup = useRef<Group>(null);
   const handleActiveLodChange = useCallback((lod: GeographicLod) => setActiveLod(lod), []);
-
-  useLayoutEffect(() => {
-    globeGroup.current?.rotation.set(0, -0.18, 0);
-  }, []);
 
   return (
     <>
       <Canvas
-        camera={{ fov: 30, near: 0.05, far: 10, position: [0.25, 0.38, 4.2] }}
+        camera={{ fov: 30, near: 0.05, far: 10, position: [0.15, 0.22, 4.5] }}
         dpr={[1, 1.5]}
         frameloop="demand"
         gl={{ alpha: true, antialias: true, powerPreference: "high-performance" }}
       >
-        <group ref={globeGroup}>
+        <group rotation={[0, -0.2, 0]}>
           <Suspense fallback={null}>
             <ReliefSurface onActiveLodChange={handleActiveLodChange} />
           </Suspense>
@@ -91,7 +148,8 @@ export function GlobeScene({
             entities={earthquakes}
             selectedId={selectedEarthquakeId}
             visible={earthquakesVisible}
-            color="#c5523b"
+            color="#d96d52"
+            ringed
             sizeFor={earthquakeSize}
             onSelect={onEarthquakeSelect}
             onSelectedPositionChange={onSelectedPositionChange}
@@ -100,7 +158,7 @@ export function GlobeScene({
             entities={fires}
             selectedId={selectedFireId}
             visible={firesVisible}
-            color="#e58c3a"
+            color="#f5a23b"
             sizeFor={fireSize}
             onSelect={onFireSelect}
             onSelectedPositionChange={onSelectedPositionChange}
@@ -108,19 +166,7 @@ export function GlobeScene({
         </group>
         <ambientLight intensity={RELIEF.ambientIntensity} />
         <directionalLight position={[-3, 4, 5]} intensity={RELIEF.directionalIntensity} />
-        <OrbitControls
-          autoRotate={autoRotate}
-          autoRotateSpeed={0.16}
-          enablePan={false}
-          enableDamping
-          dampingFactor={0.12}
-          rotateSpeed={0.25}
-          zoomSpeed={0.28}
-          minDistance={1.15}
-          maxDistance={5.25}
-          minPolarAngle={0.35}
-          maxPolarAngle={Math.PI - 0.35}
-        />
+        <GlobeControls autoRotate={autoRotate} onZoomApiChange={onZoomApiChange} onScaleChange={onScaleChange} />
         <RenderScheduler active={autoRotate} />
         {debugEnabled ? <PerformanceProbe activeLod={activeLod} onSample={setPerformance} /> : null}
       </Canvas>
