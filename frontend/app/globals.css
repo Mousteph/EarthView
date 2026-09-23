@@ -55,7 +55,7 @@ a { color: inherit; }
 .layer-count { display: flex; align-items: center; gap: 22px; color: #777a7f; font-size: 13px; white-space: nowrap; }
 .layer-count strong { margin-right: 3px; color: var(--color-ink); font-size: 19px; font-weight: 550; letter-spacing: 0.035em; }
 .summary-marker { display: block; flex: none; width: 24px; height: 24px; }
-.layer-count-earthquakes .summary-marker { border: 3px double var(--color-earthquake); border-radius: 50%; background: radial-gradient(circle, var(--color-earthquake) 0 4px, transparent 5px); }
+.layer-count-earthquakes .summary-marker { border: 2px solid var(--color-earthquake); border-radius: 50%; background: radial-gradient(circle, var(--color-earthquake) 0 5px, transparent 5.5px); }
 .layer-count-fires .summary-marker { background: radial-gradient(circle, var(--color-fire) 0 5px, transparent 6px); }
 .summary-empty { margin: 0; color: #898b8e; font-size: 12px; line-height: 1.5; }
 .stage-title { position: absolute; z-index: 0; bottom: 5.2%; font-size: clamp(76px, 7.1vw, 114px); font-weight: 650; letter-spacing: -0.055em; line-height: 0.76; text-transform: uppercase; pointer-events: none; }
@@ -85,7 +85,7 @@ a { color: inherit; }
 .event-details dd { overflow-wrap: anywhere; }
 
 .map-zoom-controls { position: absolute; z-index: 10; right: 3.15%; bottom: 13%; display: grid; justify-items: center; gap: 10px; }
-.map-zoom-controls button { display: grid; place-items: center; width: 48px; height: 48px; border: 1px solid rgb(255 255 255 / 58%); border-radius: 50%; padding: 0; background: rgb(250 249 246 / 74%); box-shadow: 0 16px 36px rgb(18 34 47 / 12%), inset 0 1px 0 rgb(255 255 255 / 72%); color: var(--color-ink); font: 300 26px/1 var(--font-family-sans); -webkit-backdrop-filter: blur(24px) saturate(140%); backdrop-filter: blur(24px) saturate(140%); }
+.map-zoom-controls button { display: grid; place-items: center; width: 48px; height: 48px; border: 0; border-radius: 50%; padding: 0; background: rgb(250 249 246 / 74%); color: var(--color-ink); font: 300 26px/1 var(--font-family-sans); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
 .map-zoom-controls button:hover, .map-zoom-controls button:focus-visible { background: #fff; }
 .map-scale { position: absolute; z-index: 10; right: 3.15%; bottom: 4.5%; color: #37393b; font-size: 11px; font-variant-numeric: tabular-nums; pointer-events: none; }
 .map-scale-labels { display: flex; justify-content: space-between; margin-bottom: 6px; white-space: nowrap; }
@@ -118,12 +118,12 @@ a { color: inherit; }
 
 .layer-controls::before, .stage-data-loaded::before, .inspection-prompt::before, .event-details::before {
   inset: -20px -22px;
-  border: 1px solid rgb(255 255 255 / 58%);
   background: rgb(250 249 246 / 74%);
-  box-shadow: 0 16px 36px rgb(18 34 47 / 12%), inset 0 1px 0 rgb(255 255 255 / 72%);
+  border: 0;
+  box-shadow: none;
   filter: none;
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
-  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
 }
 
 .data-page { min-height: 100dvh; padding: 160px 3.15% 80px; }
@@ -176,7 +176,6 @@ a { color: inherit; }
   .layer-count strong { font-size: 15px; }
   .summary-marker { width: 19px; height: 19px; }
   .inspection-prompt, .event-details { top: auto; right: 20px; bottom: 175px; width: min(260px, calc(100vw - 40px)); }
-  .inspection-prompt::before { background: rgb(250 249 246 / 88%); }
   .inspection-prompt { padding-top: 15px; }
   .inspection-prompt h2 { font-size: 10px; }
   .inspection-prompt p { margin-top: 8px; font-size: 11px; }

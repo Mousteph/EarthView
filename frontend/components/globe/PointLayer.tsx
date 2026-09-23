@@ -166,17 +166,16 @@ export function PointLayer<T extends GeoEvent>({
           ? `
             float radius = length(gl_PointCoord - vec2(0.5)) * 2.0;
             if (radius > 1.0) discard;
-            float center = 1.0 - smoothstep(0.13, 0.17, radius);
-            float outerRing = 1.0 - smoothstep(0.025, 0.055, abs(radius - 0.48));
-            float innerRing = 1.0 - smoothstep(0.025, 0.055, abs(radius - 0.76));
-            diffuseColor.a *= max(center, max(outerRing * 0.72, innerRing * 0.58));`
+            float center = 1.0 - smoothstep(0.28, 0.34, radius);
+            float outerRing = 1.0 - smoothstep(0.065, 0.11, abs(radius - 0.72));
+            diffuseColor.a *= max(center, outerRing);`
           : "if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard;";
         shader.fragmentShader = shader.fragmentShader.replace(
           "#include <clipping_planes_fragment>",
           `#include <clipping_planes_fragment>\n${markerShape}`,
         );
       };
-      material.customProgramCacheKey = () => `earthview-data-points-v2-${ringed}`;
+      material.customProgramCacheKey = () => `earthview-data-points-v3-${ringed}`;
       return material;
     },
     [color, ringed],
@@ -198,18 +197,16 @@ export function PointLayer<T extends GeoEvent>({
           ? `
             float radius = length(gl_PointCoord - vec2(0.5)) * 2.0;
             if (radius > 1.0) discard;
-            float center = 1.0 - smoothstep(0.11, 0.16, radius);
-            float outerRing = 1.0 - smoothstep(0.025, 0.05, abs(radius - 0.43));
-            float middleRing = 1.0 - smoothstep(0.025, 0.05, abs(radius - 0.7));
-            float innerRing = 1.0 - smoothstep(0.025, 0.05, abs(radius - 0.94));
-            diffuseColor.a *= max(center, max(outerRing, max(middleRing * 0.76, innerRing * 0.58)));`
+            float center = 1.0 - smoothstep(0.28, 0.34, radius);
+            float outerRing = 1.0 - smoothstep(0.07, 0.12, abs(radius - 0.72));
+            diffuseColor.a *= max(center, outerRing);`
           : "if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard;";
         shader.fragmentShader = shader.fragmentShader.replace(
           "#include <clipping_planes_fragment>",
           `#include <clipping_planes_fragment>\n${markerShape}`,
         );
       };
-      material.customProgramCacheKey = () => `earthview-selected-data-points-v2-${ringed}`;
+      material.customProgramCacheKey = () => `earthview-selected-data-points-v3-${ringed}`;
       return material;
     },
     [color, ringed],
