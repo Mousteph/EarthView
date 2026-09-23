@@ -1,15 +1,16 @@
 "use client";
 
 import { OrbitControls } from "@react-three/drei";
-import { Canvas, useFrame } from "@react-three/fiber";
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { Group } from "three";
+import { Canvas, useFrame, useLoader } from "@react-three/fiber";
+import { Suspense, useCallback, useLayoutEffect, useRef, useState } from "react";
+import { Group, TextureLoader } from "three";
 import type { Earthquake } from "@/lib/earthquakes";
 import type { Fire } from "@/lib/fires";
 import { Earth } from "./Earth";
 import { PointLayer, type SelectedPointScreenPosition } from "./PointLayer";
 import { GeographicLayers } from "./GeographicLayers";
 import type { GeographicLod } from "./geography";
+import { RELIEF } from "./relief";
 import {
   PerformancePanel,
   PerformanceProbe,
@@ -39,6 +40,17 @@ function RenderScheduler({ active }: { active: boolean }) {
   });
 
   return null;
+}
+
+function ReliefSurface({ onActiveLodChange }: { readonly onActiveLodChange: (lod: GeographicLod) => void }) {
+  const texture = useLoader(TextureLoader, RELIEF.texturePath);
+
+  return (
+    <>
+      <Earth reliefTexture={texture} />
+      <GeographicLayers reliefTexture={texture} onActiveLodChange={onActiveLodChange} />
+    </>
+  );
 }
 
 export function GlobeScene({
@@ -72,8 +84,9 @@ export function GlobeScene({
         gl={{ alpha: true, antialias: true, powerPreference: "high-performance" }}
       >
         <group ref={globeGroup}>
-          <Earth />
-          <GeographicLayers onActiveLodChange={handleActiveLodChange} />
+          <Suspense fallback={null}>
+            <ReliefSurface onActiveLodChange={handleActiveLodChange} />
+          </Suspense>
           <PointLayer
             entities={earthquakes}
             selectedId={selectedEarthquakeId}
@@ -93,6 +106,8 @@ export function GlobeScene({
             onSelectedPositionChange={onSelectedPositionChange}
           />
         </group>
+        <ambientLight intensity={RELIEF.ambientIntensity} />
+        <directionalLight position={[-3, 4, 5]} intensity={RELIEF.directionalIntensity} />
         <OrbitControls
           autoRotate={autoRotate}
           autoRotateSpeed={0.16}

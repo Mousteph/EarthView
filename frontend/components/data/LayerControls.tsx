@@ -108,6 +108,9 @@ export function LayerControls({ layers, selected, detailsRef }: {
       {layers.filter((layer) => layer.visible && layer.hasLoaded).map((layer) => <output className="layer-count" key={layer.id}>
         {layer.count} {layer.count === 1 ? layer.countLabel : `${layer.countLabel}s`}
       </output>)}
+      <a className="data-source" href="https://www.gebco.net/data-products-gridded-bathymetry-data/gebco2025-grid" target="_blank" rel="noreferrer">
+        Relief: GEBCO 2025
+      </a>
     </section>
   </>;
 }

@@ -2,7 +2,7 @@
 
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useState } from "react";
-import { FrontSide, LineBasicMaterial, MeshBasicMaterial } from "three";
+import { LineBasicMaterial, type Texture } from "three";
 import { readDesignColor } from "@/lib/designTokens";
 import { CountryBorders } from "./CountryBorders";
 import {
@@ -12,24 +12,21 @@ import {
   type GeographicLod,
 } from "./geography";
 import { Land } from "./Land";
+import { createReliefMaterial } from "./relief";
 
 type GeographicLayersProps = {
   readonly onActiveLodChange: (lod: GeographicLod) => void;
+  readonly reliefTexture: Texture;
 };
 
 type GeographyGeometries = ReturnType<typeof createGeographyGeometries>;
 
-export function GeographicLayers({ onActiveLodChange }: GeographicLayersProps) {
+export function GeographicLayers({ onActiveLodChange, reliefTexture }: GeographicLayersProps) {
   const camera = useThree((state) => state.camera);
   const invalidate = useThree((state) => state.invalidate);
   const [requestedLod, setRequestedLod] = useState<GeographicLod>("50m");
   const [geometries, setGeometries] = useState<GeographyGeometries | null>(null);
-  const landMaterial = useMemo(
-    () => new MeshBasicMaterial({
-      side: FrontSide,
-    }),
-    [],
-  );
+  const landMaterial = useMemo(() => createReliefMaterial(reliefTexture, "land"), [reliefTexture]);
   const borderMaterial = useMemo(() => {
     const material = new LineBasicMaterial({
       depthTest: false,
