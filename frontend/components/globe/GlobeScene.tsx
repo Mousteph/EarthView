@@ -148,7 +148,7 @@ export function GlobeScene({
             entities={earthquakes}
             selectedId={selectedEarthquakeId}
             visible={earthquakesVisible}
-            color="#d96d52"
+            color="#e65342"
             ringed
             sizeFor={earthquakeSize}
             onSelect={onEarthquakeSelect}
