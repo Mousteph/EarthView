@@ -10,7 +10,7 @@ npm install
 npm run dev
 ```
 
-## Run the earthquake API locally
+## Run the data API locally
 
 ```bash
 cd backend
@@ -20,7 +20,11 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
+Active Fires uses NASA FIRMS's global VIIRS NOAA-20 near-real-time Area API for the current UTC day. Request a free [FIRMS MAP_KEY](https://firms.modaps.eosdis.nasa.gov/api/area/), then put the key in `firms.map_key` in `config.yaml` (copy `config.example.yaml` first if the local file is missing). The local `config.yaml` is gitignored; only the template is tracked. Restart the backend after changing it. Without a key, `/api/fires` returns 503. The backend reuses successful FIRMS responses for two minutes. The detection time is the satellite acquisition time, and source FRP is reported in megawatts.
+
 The frontend proxies `/api/*` to `http://127.0.0.1:8000` by default. Set `EARTHVIEW_API_ORIGIN` before starting Next.js to use a different FastAPI origin.
+
+Backend source loading and normalization live in `backend/app/data_layer/`; `backend/app/main.py` exposes the API routes and calls those provider functions.
 
 The globe keeps ocean, land, country borders, and each normalized data layer as independent rendering primitives.
 
