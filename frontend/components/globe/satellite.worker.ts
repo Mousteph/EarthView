@@ -1,20 +1,20 @@
 import { eciToGeodetic, gstime, json2satrec, propagate, type SatRec } from "satellite.js";
-import type { Satellite } from "@/lib/satellites";
 import { buildOrbitPath, EARTH_RADIUS_KM, orbitPeriodMinutes, SNAPSHOT_INTERVAL_MS } from "@/lib/satelliteMath";
-import type { SatelliteWorkerInput, SatelliteWorkerOutput } from "./satelliteProtocol";
+import type { OrbitalElements, SatelliteWorkerInput, SatelliteWorkerOutput } from "./satelliteProtocol";
 
-type OrbitRecord = { satellite: Satellite; satrec: SatRec | null };
+type OrbitRecord = { satellite: OrbitalElements; satrec: SatRec | null };
 
 let records: OrbitRecord[] = [];
 let selected: OrbitRecord | null = null;
 let snapshotTimer: ReturnType<typeof setInterval> | null = null;
 let selectedTimer: ReturnType<typeof setInterval> | null = null;
 let lastTrajectoryAt = 0;
+let lastSnapshotEndMs = 0;
 
-function makeSatrec(satellite: Satellite) {
+function makeSatrec(satellite: OrbitalElements) {
   try {
     const epochMs = Date.parse(satellite.epoch);
-    if (!Number.isFinite(epochMs) || Math.abs(Date.now() - epochMs) > 14 * 24 * 60 * 60 * 1000) return null;
+    if (!Number.isFinite(epochMs) || epochMs > Date.now() + 5 * 60 * 1000) return null;
     return json2satrec({
       OBJECT_NAME: satellite.name,
       OBJECT_ID: "",
@@ -75,14 +75,15 @@ function snapshot(timeMs: number) {
 
 function sendSnapshot() {
   const started = performance.now();
-  const startMs = Date.now();
-  const endMs = startMs + SNAPSHOT_INTERVAL_MS;
-  const first = snapshot(startMs);
+  const startMs = lastSnapshotEndMs || Date.now();
+  const endMs = Math.max(startMs + SNAPSHOT_INTERVAL_MS, Date.now() + SNAPSHOT_INTERVAL_MS);
+  const first = lastSnapshotEndMs ? undefined : snapshot(startMs);
   const second = snapshot(endMs);
+  lastSnapshotEndMs = endMs;
   const message: SatelliteWorkerOutput = {
-    type: "snapshot", startMs, endMs, first, second, calculationMs: performance.now() - started,
+    type: "snapshot", startMs, endMs, ...(first ? { first } : {}), second, calculationMs: performance.now() - started,
   };
-  self.postMessage(message, { transfer: [first.buffer, second.buffer] });
+  self.postMessage(message, { transfer: first ? [first.buffer, second.buffer] : [second.buffer] });
 }
 
 function trajectory(record: OrbitRecord, timeMs: number) {
@@ -118,6 +119,7 @@ self.addEventListener("message", (event: MessageEvent<SatelliteWorkerInput>) => 
       if (selectedTimer) clearInterval(selectedTimer);
       records = event.data.satellites.map((satellite) => ({ satellite, satrec: makeSatrec(satellite) }));
       selected = null;
+      lastSnapshotEndMs = 0;
       sendSnapshot();
       snapshotTimer = setInterval(sendSnapshot, SNAPSHOT_INTERVAL_MS);
       selectedTimer = setInterval(() => sendSelected(), 1000);

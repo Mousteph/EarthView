@@ -27,6 +27,7 @@ export type PerformanceSnapshot = {
   sourceVertices: number;
   satelliteCount: number;
   satelliteWorkerMs: number;
+  satelliteWorkerInits: number;
 };
 
 declare global {
@@ -103,6 +104,7 @@ export function PerformanceProbe({ activeLod, onSample }: PerformanceProbeProps)
       sourceVertices: window.__EARTHVIEW_GEOGRAPHY__?.[activeLod]?.sourceVertices ?? 0,
       satelliteCount: window.__EARTHVIEW_SATELLITES__?.count ?? 0,
       satelliteWorkerMs: window.__EARTHVIEW_SATELLITES__?.workerCalculationMs ?? 0,
+      satelliteWorkerInits: window.__EARTHVIEW_SATELLITES__?.workerInitCount ?? 0,
     };
 
     window.__EARTHVIEW_PERFORMANCE__ = snapshot;

@@ -29,11 +29,11 @@ const sources = [
   {
     number: "03",
     category: "Live data",
-    title: "Satellites",
+    title: "Orbital objects",
     provider: "CelesTrak",
-    description: "Active satellite orbital elements are served from CelesTrak's public General Perturbations catalog. EarthView propagates positions locally from the element set.",
-    href: "https://celestrak.org/NORAD/documentation/gp-data-formats.php",
-    linkLabel: "View CelesTrak GP data formats",
+    description: "CelesTrak GP orbital elements and SATCAT catalog records supply the available active satellites, debris, and rocket bodies. EarthView propagates positions locally with SGP4. Mission and orbit labels are inferred; debris and rocket-body name searches are not a complete catalog.",
+    href: "https://celestrak.org/satcat/satcat-format.php",
+    linkLabel: "View CelesTrak SATCAT formats",
   },
   {
     number: "04",

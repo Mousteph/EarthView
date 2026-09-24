@@ -5,18 +5,20 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BufferAttribute,
   BufferGeometry,
+  Color,
   LineBasicMaterial,
   PointsMaterial,
   Vector3,
   type Group,
 } from "three";
-import type { Satellite, SelectedSatellitePosition } from "@/lib/satellites";
+import type { OrbitalMode, OrbitalObject, SelectedSatellitePosition } from "@/lib/satellites";
 import { segmentHiddenByEarth, snapshotAlpha } from "@/lib/satelliteMath";
 import type { SelectedPointScreenPosition } from "./PointLayer";
-import type { SatelliteWorkerInput, SatelliteWorkerOutput } from "./satelliteProtocol";
+import type { OrbitalElements, SatelliteWorkerInput, SatelliteWorkerOutput } from "./satelliteProtocol";
 
 type SatelliteLayerProps = {
-  readonly satellites: readonly Satellite[];
+  readonly satellites: readonly OrbitalObject[];
+  readonly visibility: Uint8Array | null;
   readonly selectedId: string | null;
   readonly onSelect: (id: string) => void;
   readonly onSelectedData: (position: SelectedSatellitePosition | null) => void;
@@ -25,21 +27,36 @@ type SatelliteLayerProps = {
 
 type Snapshot = { first: Float32Array; second: Float32Array; startMs: number; endMs: number };
 
-function createGeometry(count: number) {
+const MODE_COLORS: Readonly<Record<OrbitalMode, Color>> = {
+  satellites: new Color("#587b83"),
+  debris: new Color("#a58558"),
+  rocket_bodies: new Color("#b87553"),
+};
+
+function createGeometry(count: number, satellites?: readonly OrbitalObject[]) {
   const geometry = new BufferGeometry();
   geometry.setAttribute("position", new BufferAttribute(new Float32Array(count * 3), 3));
   geometry.setAttribute("futurePosition", new BufferAttribute(new Float32Array(count * 3), 3));
+  const colors = new Float32Array(count * 3);
+  for (let index = 0; index < count; index += 1) {
+    const color = satellites ? MODE_COLORS[satellites[index].orbitalMode] : MODE_COLORS.satellites;
+    color.toArray(colors, index * 3);
+  }
+  geometry.setAttribute("color", new BufferAttribute(colors, 3));
+  const filterVisible = new Float32Array(count);
+  filterVisible.fill(1);
+  geometry.setAttribute("filterVisible", new BufferAttribute(filterVisible, 1));
   return geometry;
 }
 
 function createMaterial(color: string, size: number, selected: boolean) {
-  const material = new PointsMaterial({ color, size, sizeAttenuation: false, depthTest: true, depthWrite: false, transparent: true, opacity: selected ? 1 : 0.83 });
+  const material = new PointsMaterial({ color, size, sizeAttenuation: false, depthTest: true, depthWrite: false, transparent: true, opacity: selected ? 1 : 0.83, vertexColors: !selected });
   material.userData.interpolationAlpha = { value: 0 };
   material.onBeforeCompile = (shader) => {
     shader.uniforms.interpolationAlpha = material.userData.interpolationAlpha;
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nattribute vec3 futurePosition;\nuniform float interpolationAlpha;\nvarying float satelliteValid;")
-      .replace("#include <begin_vertex>", "vec3 transformed = mix(position, futurePosition, interpolationAlpha);\nsatelliteValid = step(0.5, length(position)) * step(0.5, length(futurePosition));");
+      .replace("#include <common>", "#include <common>\nattribute vec3 futurePosition;\nattribute float filterVisible;\nuniform float interpolationAlpha;\nvarying float satelliteValid;")
+      .replace("#include <begin_vertex>", "vec3 transformed = mix(position, futurePosition, interpolationAlpha);\nsatelliteValid = filterVisible * step(0.5, length(position)) * step(0.5, length(futurePosition));");
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <common>", "#include <common>\nvarying float satelliteValid;")
       .replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>
@@ -60,10 +77,11 @@ function setGeometryPositions(geometry: BufferGeometry, first: Float32Array, sec
   future.needsUpdate = true;
 }
 
-export function SatelliteLayer({ satellites, selectedId, onSelect, onSelectedData, onSelectedPositionChange }: SatelliteLayerProps) {
+export function SatelliteLayer({ satellites, visibility, selectedId, onSelect, onSelectedData, onSelectedPositionChange }: SatelliteLayerProps) {
   const { camera, gl, invalidate, size } = useThree();
   const group = useRef<Group>(null);
   const worker = useRef<Worker | null>(null);
+  const workerInitCount = useRef(0);
   const snapshot = useRef<Snapshot | null>(null);
   const selectedIdRef = useRef(selectedId);
   const selectedIndexRef = useRef(-1);
@@ -74,9 +92,18 @@ export function SatelliteLayer({ satellites, selectedId, onSelect, onSelectedDat
   const highlightMaterialRef = useRef<PointsMaterial | null>(null);
   const projected = useMemo(() => new Vector3(), []);
   const cameraPosition = useMemo(() => new Vector3(), []);
-  const geometry = useMemo(() => createGeometry(satellites.length), [satellites]);
+  const geometry = useMemo(() => createGeometry(satellites.length, satellites), [satellites]);
+  const orbitElements = useMemo<OrbitalElements[]>(() => satellites.map((satellite) => ({
+    id: satellite.id, noradId: satellite.noradId, name: satellite.name, epoch: satellite.epoch,
+    meanMotion: satellite.meanMotion, eccentricity: satellite.eccentricity,
+    inclination: satellite.inclination, rightAscension: satellite.rightAscension,
+    argOfPericenter: satellite.argOfPericenter, meanAnomaly: satellite.meanAnomaly,
+    bstar: satellite.bstar, meanMotionDot: satellite.meanMotionDot,
+    meanMotionDdot: satellite.meanMotionDdot, elementSetNo: satellite.elementSetNo,
+    revolutionNumber: satellite.revolutionNumber,
+  })), [satellites]);
   const selectedGeometry = useMemo(() => createGeometry(1), []);
-  const material = useMemo(() => createMaterial("#587b83", 3.4, false), []);
+  const material = useMemo(() => createMaterial("#ffffff", 3.4, false), []);
   const selectedMaterial = useMemo(() => createMaterial("#1d1d1d", 12, true), []);
   const pathMaterial = useMemo(() => new LineBasicMaterial({ color: "#587b83", transparent: true, opacity: 0.8, depthTest: true, depthWrite: false }), []);
   const [path, setPath] = useState<{ id: string; positions: Float32Array } | null>(null);
@@ -94,6 +121,19 @@ export function SatelliteLayer({ satellites, selectedId, onSelect, onSelectedDat
   useEffect(() => { onScreenRef.current = onSelectedPositionChange; }, [onSelectedPositionChange]);
   useEffect(() => { markerMaterialRef.current = material; }, [material]);
   useEffect(() => { highlightMaterialRef.current = selectedMaterial; }, [selectedMaterial]);
+  useEffect(() => {
+    const mode = selectedIndex >= 0 ? satellites[selectedIndex].orbitalMode : "satellites";
+    pathMaterial.color.copy(MODE_COLORS[mode]);
+    invalidate();
+  }, [invalidate, pathMaterial, satellites, selectedIndex]);
+
+  useEffect(() => {
+    const attribute = geometry.getAttribute("filterVisible") as BufferAttribute;
+    const array = attribute.array as Float32Array;
+    for (let index = 0; index < satellites.length; index += 1) array[index] = visibility?.[index] ?? 1;
+    attribute.needsUpdate = true;
+    invalidate();
+  }, [geometry, invalidate, satellites, visibility]);
 
   useEffect(() => () => geometry.dispose(), [geometry]);
   useEffect(() => () => selectedGeometry.dispose(), [selectedGeometry]);
@@ -104,19 +144,22 @@ export function SatelliteLayer({ satellites, selectedId, onSelect, onSelectedDat
 
   useEffect(() => {
     if (satellites.length === 0) return;
+    workerInitCount.current += 1;
     const orbitWorker = new Worker(new URL("./satellite.worker.ts", import.meta.url), { type: "module" });
     worker.current = orbitWorker;
     orbitWorker.addEventListener("message", (event: MessageEvent<SatelliteWorkerOutput>) => {
       const message = event.data;
       if (message.type === "snapshot") {
-        snapshot.current = message;
-        setGeometryPositions(geometry, message.first, message.second);
+        const first = message.first ?? snapshot.current?.second;
+        if (!first) return;
+        snapshot.current = { first, second: message.second, startMs: message.startMs, endMs: message.endMs };
+        setGeometryPositions(geometry, first, message.second);
         const index = selectedIndexRef.current;
         if (index >= 0) {
           const offset = index * 3;
-          setGeometryPositions(selectedGeometry, message.first.subarray(offset, offset + 3), message.second.subarray(offset, offset + 3));
+          setGeometryPositions(selectedGeometry, first.subarray(offset, offset + 3), message.second.subarray(offset, offset + 3));
         }
-        if (process.env.NODE_ENV !== "production") window.__EARTHVIEW_SATELLITES__ = { count: satellites.length, workerCalculationMs: message.calculationMs };
+        if (new URLSearchParams(window.location.search).get("debug") === "1") window.__EARTHVIEW_SATELLITES__ = { count: satellites.length, workerCalculationMs: message.calculationMs, workerInitCount: workerInitCount.current };
         invalidate();
       } else if (message.type === "selected") {
         if (message.id !== selectedIdRef.current) return;
@@ -126,17 +169,17 @@ export function SatelliteLayer({ satellites, selectedId, onSelect, onSelectedDat
         console.error("Satellite propagation failed:", message.message);
       }
     });
-    orbitWorker.postMessage({ type: "init", satellites } satisfies SatelliteWorkerInput);
+    orbitWorker.postMessage({ type: "init", satellites: orbitElements } satisfies SatelliteWorkerInput);
     if (selectedIdRef.current) orbitWorker.postMessage({ type: "select", id: selectedIdRef.current } satisfies SatelliteWorkerInput);
     return () => {
       orbitWorker.terminate();
       worker.current = null;
       snapshot.current = null;
-      if (process.env.NODE_ENV !== "production") delete window.__EARTHVIEW_SATELLITES__;
+      delete window.__EARTHVIEW_SATELLITES__;
       onDataRef.current(null);
       onScreenRef.current(null);
     };
-  }, [geometry, invalidate, satellites, selectedGeometry]);
+  }, [geometry, invalidate, orbitElements, satellites.length, selectedGeometry]);
 
   useEffect(() => {
     worker.current?.postMessage({ type: "select", id: selectedId } satisfies SatelliteWorkerInput);
@@ -169,6 +212,7 @@ export function SatelliteLayer({ satellites, selectedId, onSelect, onSelectedDat
       let bestDistance = Infinity;
       let bestDepth = Infinity;
       for (let index = 0; index < satellites.length; index += 1) {
+        if (visibility && !visibility[index]) continue;
         const offset = index * 3;
         if (
           first[offset] ** 2 + first[offset + 1] ** 2 + first[offset + 2] ** 2 < 0.5
@@ -198,7 +242,7 @@ export function SatelliteLayer({ satellites, selectedId, onSelect, onSelectedDat
     };
     canvas.addEventListener("click", pick, true);
     return () => canvas.removeEventListener("click", pick, true);
-  }, [camera, cameraPosition, gl, projected, satellites]);
+  }, [camera, cameraPosition, gl, projected, satellites, visibility]);
 
   useFrame(() => {
     const current = snapshot.current;
@@ -248,6 +292,6 @@ export function SatelliteLayer({ satellites, selectedId, onSelect, onSelectedDat
 
 declare global {
   interface Window {
-    __EARTHVIEW_SATELLITES__?: { count: number; workerCalculationMs: number };
+    __EARTHVIEW_SATELLITES__?: { count: number; workerCalculationMs: number; workerInitCount: number };
   }
 }

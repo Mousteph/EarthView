@@ -8,7 +8,7 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { useThree } from "@react-three/fiber";
 import type { Earthquake } from "@/lib/earthquakes";
 import type { Fire } from "@/lib/fires";
-import type { Satellite, SelectedSatellitePosition } from "@/lib/satellites";
+import type { OrbitalObject, SelectedSatellitePosition } from "@/lib/satellites";
 import { Earth } from "./Earth";
 import { PointLayer, type SelectedPointScreenPosition } from "./PointLayer";
 import { SatelliteLayer } from "./SatelliteLayer";
@@ -30,8 +30,9 @@ type GlobeSceneProps = {
   readonly fires: readonly Fire[];
   readonly firesVisible: boolean;
   readonly selectedFireId: string | null;
-  readonly satellites: readonly Satellite[];
+  readonly satellites: readonly OrbitalObject[];
   readonly satellitesVisible: boolean;
+  readonly satelliteVisibility: Uint8Array | null;
   readonly selectedSatelliteId: string | null;
   readonly onEarthquakeSelect: (earthquakeId: string) => void;
   readonly onFireSelect: (fireId: string) => void;
@@ -86,8 +87,8 @@ function GlobeControls({
   const camera = useThree((state) => state.camera);
   const size = useThree((state) => state.size);
   const api = useMemo<ZoomApi>(() => ({
-    zoomIn: () => { controls.current?.dollyIn(1.35); controls.current?.update(); },
-    zoomOut: () => { controls.current?.dollyOut(1.35); controls.current?.update(); },
+    zoomIn: () => { controls.current?.dollyOut(1.35); controls.current?.update(); },
+    zoomOut: () => { controls.current?.dollyIn(1.35); controls.current?.update(); },
   }), []);
   const updateScale = useCallback(() => {
     const distance = camera.position.length();
@@ -130,6 +131,7 @@ function GlobeSceneComponent({
   selectedFireId,
   satellites,
   satellitesVisible,
+  satelliteVisibility,
   selectedSatelliteId,
   onEarthquakeSelect,
   onFireSelect,
@@ -177,6 +179,7 @@ function GlobeSceneComponent({
           />
           {satellitesVisible && satellites.length > 0 ? <SatelliteLayer
             satellites={satellites}
+            visibility={satelliteVisibility}
             selectedId={selectedSatelliteId}
             onSelect={onSatelliteSelect}
             onSelectedData={onSelectedSatelliteData}
