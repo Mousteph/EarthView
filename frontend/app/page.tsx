@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import { EarthViewHeader, LayerControls, type LayerControl, type SelectedEvent } from "@/components/data/LayerControls";
-import { GlobeScene, type MapScale, type ZoomApi } from "@/components/globe/GlobeScene";
+import { GlobeScene, type MapScale } from "@/components/globe/GlobeScene";
 import type { SelectedPointScreenPosition } from "@/components/globe/PointLayer";
 import { useEarthquakes } from "@/lib/earthquakes";
 import { useFires } from "@/lib/fires";
@@ -18,7 +18,6 @@ export default function Home() {
   const [orbitalFilters, setOrbitalFilters] = useState<OrbitalFilters>(EMPTY_ORBITAL_FILTERS);
   const [selection, setSelection] = useState<{ type: "earthquakes" | "fires" | "satellites"; id: string } | null>(null);
   const [selectedSatellitePosition, setSelectedSatellitePosition] = useState<SelectedSatellitePosition | null>(null);
-  const [zoomApi, setZoomApi] = useState<ZoomApi | null>(null);
   const [mapScale, setMapScale] = useState<MapScale | null>(null);
   const handleScaleChange = useCallback((scale: MapScale) => {
     setMapScale((current) => current && current.distanceKm === scale.distanceKm && Math.abs(current.widthPx - scale.widthPx) < 0.5 ? current : scale);
@@ -59,25 +58,16 @@ export default function Home() {
       ? satelliteMask[satelliteIndexes.get(object.id) ?? -1] ?? 0
       : 1);
   }, [orbitalFilters, orbitalObjects, satelliteCatalog]);
-  const visibleCount = useMemo(() => visibleOrbitalCount(visibleMask), [visibleMask]);
   const satellitesLoaded = satellitesData.hasLoaded;
   const debrisLoaded = debrisData.hasLoaded;
   const rocketBodiesLoaded = rocketBodiesData.hasLoaded;
   const orbitalSummaryItems = useMemo(() => {
-    const counts: Record<OrbitalMode, number> = { satellites: 0, debris: 0, rocket_bodies: 0 };
-    for (let index = 0; index < orbitalObjects.length; index += 1) {
-      if (visibleMask[index]) counts[orbitalObjects[index].orbitalMode] += 1;
-    }
-    const loaded: Record<OrbitalMode, boolean> = {
-      satellites: satellitesLoaded,
-      debris: debrisLoaded,
-      rocket_bodies: rocketBodiesLoaded,
-    };
-    const labels: Record<OrbitalMode, string> = { satellites: "Satellites", debris: "Debris", rocket_bodies: "Rocket Bodies" };
-    return enabledOrbitalModes.flatMap((mode) => loaded[mode]
-      ? [{ id: mode, label: labels[mode], count: counts[mode] }]
-      : []);
-  }, [debrisLoaded, enabledOrbitalModes, orbitalObjects, rocketBodiesLoaded, satellitesLoaded, visibleMask]);
+    return [
+      { id: "satellites" as const, count: visibleOrbitalCount(orbitalFilterMask(satelliteCatalog, orbitalFilters)), hasLoaded: satellitesLoaded },
+      { id: "debris" as const, count: debrisData.satellites.length, hasLoaded: debrisLoaded },
+      { id: "rocket_bodies" as const, count: rocketBodiesData.satellites.length, hasLoaded: rocketBodiesLoaded },
+    ];
+  }, [debrisData.satellites.length, debrisLoaded, orbitalFilters, rocketBodiesData.satellites.length, rocketBodiesLoaded, satelliteCatalog, satellitesLoaded]);
   const selected = useMemo((): SelectedEvent | null => {
     if (!selection) return null;
     if (selection.type === "earthquakes") {
@@ -174,18 +164,18 @@ export default function Home() {
   }, []);
 
   const layers: LayerControl[] = [
-    { id: "earthquakes", label: "Earthquakes", description: "Seismic activity, real time", countLabel: "earthquake", visible: earthquakesVisible,
+    { id: "earthquakes", label: "Earthquakes", description: "Seismic activity, real time", visible: earthquakesVisible,
       hasLoaded: earthquakesData.hasLoaded, isLoading: earthquakesData.isLoading, error: earthquakesData.error,
       count: earthquakes.length, onToggle: toggleEarthquakes, onRefresh: () => void refreshEarthquakes() },
-    { id: "fires", label: "Active Fires", description: "Wildfires and thermal hotspots", countLabel: "active fire", visible: firesVisible,
+    { id: "fires", label: "Active Fires", description: "Wildfires and thermal hotspots", visible: firesVisible,
       hasLoaded: firesData.hasLoaded, isLoading: firesData.isLoading, error: firesData.error,
       count: fires.length, onToggle: toggleFires, onRefresh: () => void refreshFires() },
-    { id: "satellites", label: "Satellites", description: "Objects in Earth orbit", countLabel: "orbital object", visible: satellitesVisible,
-      hasLoaded: enabledOrbitalModes.some((mode) => mode === "satellites" ? satellitesData.hasLoaded : mode === "debris" ? debrisData.hasLoaded : rocketBodiesData.hasLoaded),
+    { id: "satellites", label: "Satellites", description: "Objects in Earth orbit", visible: satellitesVisible,
+      hasLoaded: orbitalSummaryItems.some((item) => item.hasLoaded && enabledOrbitalModes.includes(item.id)),
       isLoading: [satellitesData, debrisData, rocketBodiesData].some((data, index) => enabledOrbitalModes.includes((["satellites", "debris", "rocket_bodies"] as const)[index]) && data.isLoading),
       error: enabledOrbitalModes.map((mode) => mode === "satellites" ? satellitesData.error : mode === "debris" ? debrisData.error : rocketBodiesData.error).find(Boolean) ?? null,
       stale: enabledOrbitalModes.some((mode) => mode === "satellites" ? satellitesData.stale : mode === "debris" ? debrisData.stale : rocketBodiesData.stale),
-      count: visibleCount, onToggle: () => {}, onRefresh: () => void refreshSatellites() },
+      count: orbitalSummaryItems.reduce((sum, item) => sum + (item.hasLoaded && enabledOrbitalModes.includes(item.id) ? item.count : 0), 0), onToggle: () => {}, onRefresh: () => void refreshSatellites() },
   ];
 
   const updateSelectedConnector = useCallback((position: SelectedPointScreenPosition | null) => {
@@ -220,7 +210,7 @@ export default function Home() {
       onPointerDown={() => setHasInteracted(true)}
       onWheel={() => setHasInteracted(true)}
     >
-      <div className="stage-title stage-title-left" aria-hidden="true">Earth<br />View</div>
+      <div className="stage-title stage-title-left" aria-hidden="true">View<span>.</span></div>
       <div className="globe-canvas">
         <GlobeScene
           autoRotate={!hasInteracted}
@@ -239,7 +229,6 @@ export default function Home() {
           onEarthquakeSelect={handleEarthquakeSelect}
           onFireSelect={handleFireSelect}
           onSelectedPositionChange={updateSelectedConnector}
-          onZoomApiChange={setZoomApi}
           onScaleChange={handleScaleChange}
         />
       </div>
@@ -251,10 +240,6 @@ export default function Home() {
       <LayerControls layers={layers} selected={selected} detailsRef={detailsRef} onClose={() => setSelection(null)} summaryItems={orbitalSummaryItems}
         orbitalControls={{ enabledModes: enabledOrbitalModes, onModeToggle: toggleOrbitalMode, filters: filterOptions,
           selectedFilters: orbitalFilters, onFilterChange: changeOrbitalFilter }} />
-      <div className="map-zoom-controls" aria-label="Map zoom controls">
-        <button type="button" onClick={() => { setHasInteracted(true); zoomApi?.zoomIn(); }} aria-label="Zoom in">+</button>
-        <button type="button" onClick={() => { setHasInteracted(true); zoomApi?.zoomOut(); }} aria-label="Zoom out">−</button>
-      </div>
       {mapScale ? <div className="map-scale" aria-label={`Scale: ${new Intl.NumberFormat("en-US").format(mapScale.distanceKm)} kilometers`}>
         <div className="map-scale-labels" style={{ width: `${mapScale.widthPx}px` }}>
           <span>0</span><span>{new Intl.NumberFormat("en-US").format(mapScale.distanceKm / 2)}</span><span>{new Intl.NumberFormat("en-US").format(mapScale.distanceKm)} km</span>

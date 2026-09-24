@@ -2,9 +2,8 @@
 
 import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useLoader } from "@react-three/fiber";
-import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, Suspense, useCallback, useEffect, useState } from "react";
 import { TextureLoader } from "three";
-import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { useThree } from "@react-three/fiber";
 import type { Earthquake } from "@/lib/earthquakes";
 import type { Fire } from "@/lib/fires";
@@ -39,11 +38,9 @@ type GlobeSceneProps = {
   readonly onSatelliteSelect: (satelliteId: string) => void;
   readonly onSelectedSatelliteData: (position: SelectedSatellitePosition | null) => void;
   readonly onSelectedPositionChange: (position: SelectedPointScreenPosition | null) => void;
-  readonly onZoomApiChange: (api: ZoomApi | null) => void;
   readonly onScaleChange: (scale: MapScale) => void;
 };
 
-export type ZoomApi = { readonly zoomIn: () => void; readonly zoomOut: () => void };
 export type MapScale = { readonly distanceKm: number; readonly widthPx: number };
 
 const earthquakeSize = (earthquake: Earthquake) => Math.min(3, Math.max(0.75, 0.75 + Math.max(0, earthquake.magnitude) * 0.35));
@@ -76,20 +73,13 @@ function niceDistance(value: number) {
 
 function GlobeControls({
   autoRotate,
-  onZoomApiChange,
   onScaleChange,
 }: {
   readonly autoRotate: boolean;
-  readonly onZoomApiChange: GlobeSceneProps["onZoomApiChange"];
   readonly onScaleChange: GlobeSceneProps["onScaleChange"];
 }) {
-  const controls = useRef<OrbitControlsImpl>(null);
   const camera = useThree((state) => state.camera);
   const size = useThree((state) => state.size);
-  const api = useMemo<ZoomApi>(() => ({
-    zoomIn: () => { controls.current?.dollyOut(1.35); controls.current?.update(); },
-    zoomOut: () => { controls.current?.dollyIn(1.35); controls.current?.update(); },
-  }), []);
   const updateScale = useCallback(() => {
     const distance = camera.position.length();
     const focalPixels = size.height / (2 * Math.tan(("fov" in camera ? camera.fov : 30) * Math.PI / 360));
@@ -99,13 +89,10 @@ function GlobeControls({
   }, [camera, onScaleChange, size.height]);
 
   useEffect(() => {
-    onZoomApiChange(api);
     updateScale();
-    return () => onZoomApiChange(null);
-  }, [api, onZoomApiChange, updateScale]);
+  }, [updateScale]);
 
   return <OrbitControls
-    ref={controls}
     onChange={updateScale}
     autoRotate={autoRotate}
     autoRotateSpeed={0.16}
@@ -138,7 +125,6 @@ function GlobeSceneComponent({
   onSatelliteSelect,
   onSelectedSatelliteData,
   onSelectedPositionChange,
-  onZoomApiChange,
   onScaleChange,
 }: GlobeSceneProps) {
   const debugEnabled = usePerformanceDebugEnabled();
@@ -149,12 +135,12 @@ function GlobeSceneComponent({
   return (
     <>
       <Canvas
-        camera={{ fov: 30, near: 0.05, far: 25, position: [0.15, 0.22, 4.5] }}
+        camera={{ fov: 30, near: 0.05, far: 25, position: [0.12, 0.35, 5.0] }}
         dpr={[1, 1.5]}
         frameloop="demand"
         gl={{ alpha: true, antialias: true, powerPreference: "high-performance" }}
       >
-        <group rotation={[0, -0.2, 0]}>
+        <group rotation={[0, -0.1, 0]}>
           <Suspense fallback={null}>
             <ReliefSurface onActiveLodChange={handleActiveLodChange} />
           </Suspense>
@@ -188,7 +174,7 @@ function GlobeSceneComponent({
         </group>
         <ambientLight intensity={RELIEF.ambientIntensity} />
         <directionalLight position={[-3, 4, 5]} intensity={RELIEF.directionalIntensity} />
-        <GlobeControls autoRotate={autoRotate} onZoomApiChange={onZoomApiChange} onScaleChange={onScaleChange} />
+        <GlobeControls autoRotate={autoRotate} onScaleChange={onScaleChange} />
         <RenderScheduler active={debugEnabled || autoRotate || (satellitesVisible && satellites.length > 0)} />
         {debugEnabled ? <PerformanceProbe activeLod={activeLod} onSample={setPerformance} /> : null}
       </Canvas>
