@@ -1,0 +1,253 @@
+"use client";
+
+import { useFrame, useThree } from "@react-three/fiber";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  BufferAttribute,
+  BufferGeometry,
+  LineBasicMaterial,
+  PointsMaterial,
+  Vector3,
+  type Group,
+} from "three";
+import type { Satellite, SelectedSatellitePosition } from "@/lib/satellites";
+import { segmentHiddenByEarth, snapshotAlpha } from "@/lib/satelliteMath";
+import type { SelectedPointScreenPosition } from "./PointLayer";
+import type { SatelliteWorkerInput, SatelliteWorkerOutput } from "./satelliteProtocol";
+
+type SatelliteLayerProps = {
+  readonly satellites: readonly Satellite[];
+  readonly selectedId: string | null;
+  readonly onSelect: (id: string) => void;
+  readonly onSelectedData: (position: SelectedSatellitePosition | null) => void;
+  readonly onSelectedPositionChange: (position: SelectedPointScreenPosition | null) => void;
+};
+
+type Snapshot = { first: Float32Array; second: Float32Array; startMs: number; endMs: number };
+
+function createGeometry(count: number) {
+  const geometry = new BufferGeometry();
+  geometry.setAttribute("position", new BufferAttribute(new Float32Array(count * 3), 3));
+  geometry.setAttribute("futurePosition", new BufferAttribute(new Float32Array(count * 3), 3));
+  return geometry;
+}
+
+function createMaterial(color: string, size: number, selected: boolean) {
+  const material = new PointsMaterial({ color, size, sizeAttenuation: false, depthTest: true, depthWrite: false, transparent: true, opacity: selected ? 1 : 0.83 });
+  material.userData.interpolationAlpha = { value: 0 };
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.interpolationAlpha = material.userData.interpolationAlpha;
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nattribute vec3 futurePosition;\nuniform float interpolationAlpha;\nvarying float satelliteValid;")
+      .replace("#include <begin_vertex>", "vec3 transformed = mix(position, futurePosition, interpolationAlpha);\nsatelliteValid = step(0.5, length(position)) * step(0.5, length(futurePosition));");
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying float satelliteValid;")
+      .replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>
+        if (satelliteValid < 0.5) discard;
+        float radius = length(gl_PointCoord - vec2(0.5));
+        ${selected ? "if (radius > 0.5 || (radius < 0.29 && radius > 0.17)) discard;" : "if (radius > 0.5) discard;"}`);
+  };
+  material.customProgramCacheKey = () => `earthview-satellite-${selected ? "selected" : "points"}-v1`;
+  return material;
+}
+
+function setGeometryPositions(geometry: BufferGeometry, first: Float32Array, second: Float32Array) {
+  const current = geometry.getAttribute("position") as BufferAttribute;
+  const future = geometry.getAttribute("futurePosition") as BufferAttribute;
+  (current.array as Float32Array).set(first);
+  (future.array as Float32Array).set(second);
+  current.needsUpdate = true;
+  future.needsUpdate = true;
+}
+
+export function SatelliteLayer({ satellites, selectedId, onSelect, onSelectedData, onSelectedPositionChange }: SatelliteLayerProps) {
+  const { camera, gl, invalidate, size } = useThree();
+  const group = useRef<Group>(null);
+  const worker = useRef<Worker | null>(null);
+  const snapshot = useRef<Snapshot | null>(null);
+  const selectedIdRef = useRef(selectedId);
+  const selectedIndexRef = useRef(-1);
+  const onSelectRef = useRef(onSelect);
+  const onDataRef = useRef(onSelectedData);
+  const onScreenRef = useRef(onSelectedPositionChange);
+  const markerMaterialRef = useRef<PointsMaterial | null>(null);
+  const highlightMaterialRef = useRef<PointsMaterial | null>(null);
+  const projected = useMemo(() => new Vector3(), []);
+  const cameraPosition = useMemo(() => new Vector3(), []);
+  const geometry = useMemo(() => createGeometry(satellites.length), [satellites]);
+  const selectedGeometry = useMemo(() => createGeometry(1), []);
+  const material = useMemo(() => createMaterial("#587b83", 3.4, false), []);
+  const selectedMaterial = useMemo(() => createMaterial("#1d1d1d", 12, true), []);
+  const pathMaterial = useMemo(() => new LineBasicMaterial({ color: "#587b83", transparent: true, opacity: 0.8, depthTest: true, depthWrite: false }), []);
+  const [path, setPath] = useState<{ id: string; positions: Float32Array } | null>(null);
+  const selectedIndex = useMemo(() => satellites.findIndex((satellite) => satellite.id === selectedId), [satellites, selectedId]);
+  const pathGeometry = useMemo(() => path && path.id === selectedId ? (() => {
+    const result = new BufferGeometry();
+    result.setAttribute("position", new BufferAttribute(path.positions, 3));
+    return result;
+  })() : null, [path, selectedId]);
+
+  useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
+  useEffect(() => { selectedIndexRef.current = selectedIndex; }, [selectedIndex]);
+  useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
+  useEffect(() => { onDataRef.current = onSelectedData; }, [onSelectedData]);
+  useEffect(() => { onScreenRef.current = onSelectedPositionChange; }, [onSelectedPositionChange]);
+  useEffect(() => { markerMaterialRef.current = material; }, [material]);
+  useEffect(() => { highlightMaterialRef.current = selectedMaterial; }, [selectedMaterial]);
+
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  useEffect(() => () => selectedGeometry.dispose(), [selectedGeometry]);
+  useEffect(() => () => material.dispose(), [material]);
+  useEffect(() => () => selectedMaterial.dispose(), [selectedMaterial]);
+  useEffect(() => () => pathMaterial.dispose(), [pathMaterial]);
+  useEffect(() => () => pathGeometry?.dispose(), [pathGeometry]);
+
+  useEffect(() => {
+    if (satellites.length === 0) return;
+    const orbitWorker = new Worker(new URL("./satellite.worker.ts", import.meta.url), { type: "module" });
+    worker.current = orbitWorker;
+    orbitWorker.addEventListener("message", (event: MessageEvent<SatelliteWorkerOutput>) => {
+      const message = event.data;
+      if (message.type === "snapshot") {
+        snapshot.current = message;
+        setGeometryPositions(geometry, message.first, message.second);
+        const index = selectedIndexRef.current;
+        if (index >= 0) {
+          const offset = index * 3;
+          setGeometryPositions(selectedGeometry, message.first.subarray(offset, offset + 3), message.second.subarray(offset, offset + 3));
+        }
+        if (process.env.NODE_ENV !== "production") window.__EARTHVIEW_SATELLITES__ = { count: satellites.length, workerCalculationMs: message.calculationMs };
+        invalidate();
+      } else if (message.type === "selected") {
+        if (message.id !== selectedIdRef.current) return;
+        onDataRef.current(message.position);
+        if ("trajectory" in message) setPath(message.trajectory ? { id: message.id, positions: message.trajectory } : null);
+      } else {
+        console.error("Satellite propagation failed:", message.message);
+      }
+    });
+    orbitWorker.postMessage({ type: "init", satellites } satisfies SatelliteWorkerInput);
+    if (selectedIdRef.current) orbitWorker.postMessage({ type: "select", id: selectedIdRef.current } satisfies SatelliteWorkerInput);
+    return () => {
+      orbitWorker.terminate();
+      worker.current = null;
+      snapshot.current = null;
+      if (process.env.NODE_ENV !== "production") delete window.__EARTHVIEW_SATELLITES__;
+      onDataRef.current(null);
+      onScreenRef.current(null);
+    };
+  }, [geometry, invalidate, satellites, selectedGeometry]);
+
+  useEffect(() => {
+    worker.current?.postMessage({ type: "select", id: selectedId } satisfies SatelliteWorkerInput);
+    if (!selectedId) {
+      onDataRef.current(null);
+      onScreenRef.current(null);
+    } else {
+      const current = snapshot.current;
+      const index = satellites.findIndex((satellite) => satellite.id === selectedId);
+      if (current && index >= 0) {
+        const offset = index * 3;
+        setGeometryPositions(selectedGeometry, current.first.subarray(offset, offset + 3), current.second.subarray(offset, offset + 3));
+      }
+    }
+    invalidate();
+  }, [invalidate, satellites, selectedGeometry, selectedId]);
+
+  useEffect(() => {
+    const canvas = gl.domElement;
+    const pick = (event: MouseEvent) => {
+      if (!group.current || !snapshot.current) return;
+      const bounds = canvas.getBoundingClientRect();
+      const clickX = event.clientX - bounds.left;
+      const clickY = event.clientY - bounds.top;
+      const { first, second, startMs, endMs } = snapshot.current;
+      const blend = snapshotAlpha(Date.now(), startMs, endMs);
+      camera.getWorldPosition(cameraPosition);
+      group.current.updateWorldMatrix(true, false);
+      let bestIndex = -1;
+      let bestDistance = Infinity;
+      let bestDepth = Infinity;
+      for (let index = 0; index < satellites.length; index += 1) {
+        const offset = index * 3;
+        if (
+          first[offset] ** 2 + first[offset + 1] ** 2 + first[offset + 2] ** 2 < 0.5
+          || second[offset] ** 2 + second[offset + 1] ** 2 + second[offset + 2] ** 2 < 0.5
+        ) continue;
+        const x = first[offset] + (second[offset] - first[offset]) * blend;
+        const y = first[offset + 1] + (second[offset + 1] - first[offset + 1]) * blend;
+        const z = first[offset + 2] + (second[offset + 2] - first[offset + 2]) * blend;
+        if (x * x + y * y + z * z < 0.5) continue;
+        projected.set(x, y, z).applyMatrix4(group.current.matrixWorld);
+        if (segmentHiddenByEarth(cameraPosition.x, cameraPosition.y, cameraPosition.z, projected.x, projected.y, projected.z)) continue;
+        const depth = projected.distanceToSquared(cameraPosition);
+        projected.project(camera);
+        if (projected.z < -1 || projected.z > 1) continue;
+        const screenX = (projected.x + 1) * bounds.width * 0.5;
+        const screenY = (1 - projected.y) * bounds.height * 0.5;
+        const distance = (screenX - clickX) ** 2 + (screenY - clickY) ** 2;
+        if (distance <= 64 && (distance < bestDistance || (distance === bestDistance && depth < bestDepth))) {
+          bestIndex = index;
+          bestDistance = distance;
+          bestDepth = depth;
+        }
+      }
+      if (bestIndex < 0) return;
+      event.stopPropagation();
+      onSelectRef.current(satellites[bestIndex].id);
+    };
+    canvas.addEventListener("click", pick, true);
+    return () => canvas.removeEventListener("click", pick, true);
+  }, [camera, cameraPosition, gl, projected, satellites]);
+
+  useFrame(() => {
+    const current = snapshot.current;
+    if (!current) return;
+    const blend = snapshotAlpha(Date.now(), current.startMs, current.endMs);
+    if (markerMaterialRef.current) markerMaterialRef.current.userData.interpolationAlpha.value = blend;
+    if (highlightMaterialRef.current) highlightMaterialRef.current.userData.interpolationAlpha.value = blend;
+    if (!selectedIdRef.current || !group.current) return;
+    const index = selectedIndexRef.current;
+    if (index < 0) return;
+    const offset = index * 3;
+    if (
+      current.first[offset] ** 2 + current.first[offset + 1] ** 2 + current.first[offset + 2] ** 2 < 0.5
+      || current.second[offset] ** 2 + current.second[offset + 1] ** 2 + current.second[offset + 2] ** 2 < 0.5
+    ) {
+      onScreenRef.current(null);
+      return;
+    }
+    const x = current.first[offset] + (current.second[offset] - current.first[offset]) * blend;
+    const y = current.first[offset + 1] + (current.second[offset + 1] - current.first[offset + 1]) * blend;
+    const z = current.first[offset + 2] + (current.second[offset + 2] - current.first[offset + 2]) * blend;
+    if (x * x + y * y + z * z < 0.5) {
+      onScreenRef.current(null);
+      return;
+    }
+    group.current.updateWorldMatrix(true, false);
+    projected.set(x, y, z).applyMatrix4(group.current.matrixWorld);
+    camera.getWorldPosition(cameraPosition);
+    if (segmentHiddenByEarth(cameraPosition.x, cameraPosition.y, cameraPosition.z, projected.x, projected.y, projected.z)) {
+      onScreenRef.current(null);
+      return;
+    }
+    projected.project(camera);
+    if (projected.x < -1 || projected.x > 1 || projected.y < -1 || projected.y > 1 || projected.z < -1 || projected.z > 1) {
+      onScreenRef.current(null);
+      return;
+    }
+    onScreenRef.current({ x: (projected.x + 1) * size.width * 0.5, y: (1 - projected.y) * size.height * 0.5, width: size.width, height: size.height });
+  });
+
+  return <group ref={group}>
+    <points geometry={geometry} material={material} frustumCulled={false} raycast={() => null} renderOrder={2} />
+    {selectedId ? <points geometry={selectedGeometry} material={selectedMaterial} frustumCulled={false} raycast={() => null} renderOrder={4} /> : null}
+    {selectedId && pathGeometry ? <lineLoop geometry={pathGeometry} material={pathMaterial} frustumCulled={false} renderOrder={3} /> : null}
+  </group>;
+}
+
+declare global {
+  interface Window {
+    __EARTHVIEW_SATELLITES__?: { count: number; workerCalculationMs: number };
+  }
+}

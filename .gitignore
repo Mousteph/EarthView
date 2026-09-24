@@ -10,3 +10,4 @@ graphify-out/
 .vscode/
 .DS_Store
 __pycache__/
+backend/.cache/

@@ -22,6 +22,8 @@ uvicorn app.main:app --reload
 
 Active Fires uses NASA FIRMS's global VIIRS NOAA-20 near-real-time Area API for the current UTC day. Request a free [FIRMS MAP_KEY](https://firms.modaps.eosdis.nasa.gov/api/area/), then put the key in `firms.map_key` in `config.yaml` (copy `config.example.yaml` first if the local file is missing). The local `config.yaml` is gitignored; only the template is tracked. Restart the backend after changing it. Without a key, `/api/fires` returns 503. The backend reuses successful FIRMS responses for two minutes. The detection time is the satellite acquisition time, and source FRP is reported in megawatts.
 
+Satellites uses CelesTrak's active General Perturbations catalog. FastAPI caches orbital elements locally and refreshes the upstream feed no more often than every 2 hours and 5 minutes; the browser propagates the elements with SGP4 in a worker and updates rendered positions every 5 seconds. Enable Satellites on the map to load the catalog, inspect an object, and see its live position and orbit.
+
 The frontend proxies `/api/*` to `http://127.0.0.1:8000` by default. Set `EARTHVIEW_API_ORIGIN` before starting Next.js to use a different FastAPI origin.
 
 Backend source loading and normalization live in `backend/app/data_layer/`; `backend/app/main.py` exposes the API routes and calls those provider functions.

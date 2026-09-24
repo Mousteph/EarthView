@@ -6,12 +6,15 @@ import { GlobeScene, type MapScale, type ZoomApi } from "@/components/globe/Glob
 import type { SelectedPointScreenPosition } from "@/components/globe/PointLayer";
 import { useEarthquakes } from "@/lib/earthquakes";
 import { useFires } from "@/lib/fires";
+import { useSatellites, type SelectedSatellitePosition } from "@/lib/satellites";
 
 export default function Home() {
   const [hasInteracted, setHasInteracted] = useState(false);
   const [earthquakesVisible, setEarthquakesVisible] = useState(false);
   const [firesVisible, setFiresVisible] = useState(false);
-  const [selection, setSelection] = useState<{ type: "earthquakes" | "fires"; id: string } | null>(null);
+  const [satellitesVisible, setSatellitesVisible] = useState(false);
+  const [selection, setSelection] = useState<{ type: "earthquakes" | "fires" | "satellites"; id: string } | null>(null);
+  const [selectedSatellitePosition, setSelectedSatellitePosition] = useState<SelectedSatellitePosition | null>(null);
   const [zoomApi, setZoomApi] = useState<ZoomApi | null>(null);
   const [mapScale, setMapScale] = useState<MapScale | null>(null);
   const handleScaleChange = useCallback((scale: MapScale) => {
@@ -23,6 +26,7 @@ export default function Home() {
   const detailsRef = useRef<HTMLElement>(null);
   const earthquakesData = useEarthquakes();
   const firesData = useFires();
+  const satellitesData = useSatellites(satellitesVisible);
   const { earthquakes } = earthquakesData;
   const { fires } = firesData;
   const selected = useMemo((): SelectedEvent | null => {
@@ -31,9 +35,13 @@ export default function Home() {
       const index = earthquakes.findIndex((event) => event.id === selection.id);
       return index < 0 ? null : { type: "earthquakes", event: earthquakes[index], index, total: earthquakes.length };
     }
+    if (selection.type === "satellites") {
+      const satellite = satellitesData.satellites.find((item) => item.id === selection.id);
+      return satellite ? { type: "satellites", event: satellite, position: selectedSatellitePosition } : null;
+    }
     const index = fires.findIndex((event) => event.id === selection.id);
     return index < 0 ? null : { type: "fires", event: fires[index], index, total: fires.length };
-  }, [earthquakes, fires, selection]);
+  }, [earthquakes, fires, satellitesData.satellites, selectedSatellitePosition, selection]);
 
   const toggleEarthquakes = () => {
     if (earthquakesVisible && selection?.type === "earthquakes") setSelection(null);
@@ -45,6 +53,14 @@ export default function Home() {
     if (firesVisible && selection?.type === "fires") setSelection(null);
     if (!firesVisible && !firesData.hasLoaded && !firesData.isLoading) void firesData.refresh();
     setFiresVisible((visible) => !visible);
+  };
+
+  const toggleSatellites = () => {
+    if (satellitesVisible && selection?.type === "satellites") {
+      setSelection(null);
+      setSelectedSatellitePosition(null);
+    }
+    setSatellitesVisible((visible) => !visible);
   };
 
   const refreshEarthquakes = async () => {
@@ -65,6 +81,24 @@ export default function Home() {
     }
   };
 
+  const refreshSatellites = async () => {
+    const updatedSatellites = await satellitesData.refresh();
+    if (updatedSatellites && selection?.type === "satellites" && !updatedSatellites.satellites.some((satellite) => satellite.id === selection.id)) {
+      setSelection((current) => current?.type === "satellites" && current.id === selection.id ? null : current);
+      setSelectedSatellitePosition(null);
+    }
+  };
+
+  const handleEarthquakeSelect = useCallback((id: string) => setSelection({ type: "earthquakes", id }), []);
+  const handleFireSelect = useCallback((id: string) => setSelection({ type: "fires", id }), []);
+  const handleSatelliteSelect = useCallback((id: string) => {
+    setSelectedSatellitePosition(null);
+    setSelection({ type: "satellites", id });
+  }, []);
+  const handleSelectedSatelliteData = useCallback((position: SelectedSatellitePosition | null) => {
+    setSelectedSatellitePosition(position);
+  }, []);
+
   const layers: LayerControl[] = [
     { id: "earthquakes", label: "Earthquakes", description: "Seismic activity, real time", countLabel: "earthquake", visible: earthquakesVisible,
       hasLoaded: earthquakesData.hasLoaded, isLoading: earthquakesData.isLoading, error: earthquakesData.error,
@@ -72,6 +106,9 @@ export default function Home() {
     { id: "fires", label: "Active Fires", description: "Wildfires and thermal hotspots", countLabel: "active fire", visible: firesVisible,
       hasLoaded: firesData.hasLoaded, isLoading: firesData.isLoading, error: firesData.error,
       count: fires.length, onToggle: toggleFires, onRefresh: () => void refreshFires() },
+    { id: "satellites", label: "Satellites", description: "Active objects in Earth orbit", countLabel: "satellite", visible: satellitesVisible,
+      hasLoaded: satellitesData.hasLoaded, isLoading: satellitesData.isLoading, error: satellitesData.error, stale: satellitesData.stale,
+      count: satellitesData.satellites.length, onToggle: toggleSatellites, onRefresh: () => void refreshSatellites() },
   ];
 
   const updateSelectedConnector = useCallback((position: SelectedPointScreenPosition | null) => {
@@ -115,9 +152,14 @@ export default function Home() {
           selectedEarthquakeId={selection?.type === "earthquakes" ? selection.id : null}
           fires={fires}
           firesVisible={firesVisible}
+          satellites={satellitesData.satellites}
+          satellitesVisible={satellitesVisible}
+          selectedSatelliteId={selection?.type === "satellites" ? selection.id : null}
+          onSatelliteSelect={handleSatelliteSelect}
+          onSelectedSatelliteData={handleSelectedSatelliteData}
           selectedFireId={selection?.type === "fires" ? selection.id : null}
-          onEarthquakeSelect={(id) => setSelection({ type: "earthquakes", id })}
-          onFireSelect={(id) => setSelection({ type: "fires", id })}
+          onEarthquakeSelect={handleEarthquakeSelect}
+          onFireSelect={handleFireSelect}
           onSelectedPositionChange={updateSelectedConnector}
           onZoomApiChange={setZoomApi}
           onScaleChange={handleScaleChange}

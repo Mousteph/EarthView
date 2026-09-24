@@ -28,6 +28,15 @@ const sources = [
   },
   {
     number: "03",
+    category: "Live data",
+    title: "Satellites",
+    provider: "CelesTrak",
+    description: "Active satellite orbital elements are served from CelesTrak's public General Perturbations catalog. EarthView propagates positions locally from the element set.",
+    href: "https://celestrak.org/NORAD/documentation/gp-data-formats.php",
+    linkLabel: "View CelesTrak GP data formats",
+  },
+  {
+    number: "04",
     category: "Base geography",
     title: "Land and country borders",
     provider: "Natural Earth",
@@ -36,7 +45,7 @@ const sources = [
     linkLabel: "View Natural Earth data and terms",
   },
   {
-    number: "04",
+    number: "05",
     category: "Base geography",
     title: "Land and seafloor relief",
     provider: "GEBCO Compilation Group (2025), GEBCO 2025 Grid",

@@ -4,9 +4,10 @@ import { useEffect, useState, type RefObject } from "react";
 import Link from "next/link";
 import type { Earthquake } from "@/lib/earthquakes";
 import type { Fire } from "@/lib/fires";
+import type { Satellite, SelectedSatellitePosition } from "@/lib/satellites";
 
 export type LayerControl = {
-  readonly id: "earthquakes" | "fires";
+  readonly id: "earthquakes" | "fires" | "satellites";
   readonly label: string;
   readonly description: string;
   readonly countLabel: string;
@@ -14,6 +15,7 @@ export type LayerControl = {
   readonly hasLoaded: boolean;
   readonly isLoading: boolean;
   readonly error: string | null;
+  readonly stale?: boolean;
   readonly count: number;
   readonly onToggle: () => void;
   readonly onRefresh: () => void;
@@ -21,7 +23,8 @@ export type LayerControl = {
 
 export type SelectedEvent =
   | { readonly type: "earthquakes"; readonly event: Earthquake; readonly index: number; readonly total: number }
-  | { readonly type: "fires"; readonly event: Fire; readonly index: number; readonly total: number };
+  | { readonly type: "fires"; readonly event: Fire; readonly index: number; readonly total: number }
+  | { readonly type: "satellites"; readonly event: Satellite; readonly position: SelectedSatellitePosition | null };
 
 function UtcClock() {
   const [time, setTime] = useState("--:--:--");
@@ -72,6 +75,23 @@ function EventDetails({ selected, detailsRef, onClose }: {
   readonly detailsRef: RefObject<HTMLElement | null>;
   readonly onClose: () => void;
 }) {
+  if (selected.type === "satellites") {
+    const { event: satellite, position } = selected;
+    return <section className="event-details" aria-label="Selected satellite" ref={detailsRef}>
+      <button className="event-close" type="button" onClick={onClose} aria-label="Close selected satellite">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+      </button>
+      <div className="event-details-heading"><span>Satellite</span><span>NORAD {satellite.noradId}</span></div>
+      <div className="event-primary"><div className="satellite-primary-label">{satellite.name}</div><p>Active orbit</p></div>
+      <dl>
+        <div><dt>Altitude</dt><dd>{position ? `${position.altitudeKm.toFixed(1)} km` : "Calculating"}</dd></div>
+        <div><dt>Velocity</dt><dd>{position ? `${position.velocityKmS.toFixed(2)} km/s` : "Calculating"}</dd></div>
+        <div><dt>Inclination</dt><dd>{satellite.inclination.toFixed(2)}°</dd></div>
+        <div><dt>Period</dt><dd>{(1440 / satellite.meanMotion).toFixed(1)} min</dd></div>
+        <div><dt>Coordinates</dt><dd>{position ? formatCoordinates(position.latitude, position.longitude) : "Calculating"}</dd></div>
+      </dl>
+    </section>;
+  }
   const fire = selected.type === "fires" ? selected.event : null;
   const earthquake = selected.type === "earthquakes" ? selected.event : null;
   const isFire = fire !== null;
@@ -121,6 +141,7 @@ export function LayerControls({ layers, selected, detailsRef, onClose }: {
           </button>
         </div>
         {layer.error ? <p className="layer-status" role="alert">{layer.error}</p> : null}
+        {layer.stale && !layer.error ? <p className="layer-status layer-status-stale">Using cached orbital data</p> : null}
       </div>)}
     </aside>
     {selected ? <EventDetails selected={selected} detailsRef={detailsRef} onClose={onClose} /> : <section className="inspection-prompt" aria-label="Inspect data">

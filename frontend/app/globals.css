@@ -35,6 +35,7 @@ a { color: inherit; }
 .layer-toggle { display: flex; align-items: center; flex: 1; min-width: 0; gap: 23px; border: 0; padding: 0; background: transparent; text-align: left; }
 .layer-toggle-earthquakes { --layer-color: var(--color-earthquake); }
 .layer-toggle-fires { --layer-color: var(--color-fire); }
+.layer-toggle-satellites { --layer-color: var(--color-satellite); }
 .layer-toggle-circle { display: grid; flex: none; place-items: center; width: 25px; height: 25px; border: 1px solid var(--layer-color); border-radius: 50%; background: color-mix(in srgb, var(--layer-color) 12%, white); transition: box-shadow 160ms ease, transform 160ms ease; }
 .layer-toggle-circle::after { width: 15px; height: 15px; border-radius: 50%; background: var(--layer-color); content: ""; }
 .layer-toggle[aria-pressed="true"] .layer-toggle-circle { box-shadow: 0 0 0 3px color-mix(in srgb, var(--layer-color) 22%, transparent); transform: scale(1.04); }
@@ -57,6 +58,9 @@ a { color: inherit; }
 .summary-marker { display: block; flex: none; width: 24px; height: 24px; }
 .layer-count-earthquakes .summary-marker { border: 2px solid var(--color-earthquake); border-radius: 50%; background: radial-gradient(circle, var(--color-earthquake) 0 5px, transparent 5.5px); }
 .layer-count-fires .summary-marker { background: radial-gradient(circle, var(--color-fire) 0 5px, transparent 6px); }
+.layer-count-satellites .summary-marker { background: radial-gradient(circle, var(--color-satellite) 0 5px, transparent 6px); }
+.layer-status-stale { color: #777a7f; }
+.satellite-primary-label { color: var(--color-satellite); font-size: clamp(28px, 2.6vw, 42px) !important; white-space: normal !important; overflow-wrap: anywhere; }
 .summary-empty { margin: 0; color: #898b8e; font-size: 12px; line-height: 1.5; }
 .stage-title { position: absolute; z-index: 0; bottom: 5.2%; font-size: clamp(76px, 7.1vw, 114px); font-weight: 650; letter-spacing: -0.055em; line-height: 0.76; text-transform: uppercase; pointer-events: none; }
 .stage-title-left { left: 3.15%; }
@@ -170,7 +174,7 @@ a { color: inherit; }
   .layer-toggle-circle { width: 21px; height: 21px; }
   .layer-toggle-circle::after { width: 12px; height: 12px; }
   .layer-refresh svg { width: 18px; height: 18px; }
-  .stage-data-loaded { top: 232px; left: 20px; width: min(255px, calc(100vw - 40px)); gap: 8px; }
+  .stage-data-loaded { top: 284px; left: 20px; width: min(255px, calc(100vw - 40px)); gap: 8px; }
   .stage-data-loaded h2 { font-size: 10px; }
   .layer-count { gap: 14px; font-size: 11px; }
   .layer-count strong { font-size: 15px; }

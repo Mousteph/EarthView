@@ -2,14 +2,16 @@
 
 import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useLoader } from "@react-three/fiber";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TextureLoader } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { useThree } from "@react-three/fiber";
 import type { Earthquake } from "@/lib/earthquakes";
 import type { Fire } from "@/lib/fires";
+import type { Satellite, SelectedSatellitePosition } from "@/lib/satellites";
 import { Earth } from "./Earth";
 import { PointLayer, type SelectedPointScreenPosition } from "./PointLayer";
+import { SatelliteLayer } from "./SatelliteLayer";
 import { GeographicLayers } from "./GeographicLayers";
 import type { GeographicLod } from "./geography";
 import { RELIEF } from "./relief";
@@ -28,8 +30,13 @@ type GlobeSceneProps = {
   readonly fires: readonly Fire[];
   readonly firesVisible: boolean;
   readonly selectedFireId: string | null;
+  readonly satellites: readonly Satellite[];
+  readonly satellitesVisible: boolean;
+  readonly selectedSatelliteId: string | null;
   readonly onEarthquakeSelect: (earthquakeId: string) => void;
   readonly onFireSelect: (fireId: string) => void;
+  readonly onSatelliteSelect: (satelliteId: string) => void;
+  readonly onSelectedSatelliteData: (position: SelectedSatellitePosition | null) => void;
   readonly onSelectedPositionChange: (position: SelectedPointScreenPosition | null) => void;
   readonly onZoomApiChange: (api: ZoomApi | null) => void;
   readonly onScaleChange: (scale: MapScale) => void;
@@ -107,13 +114,13 @@ function GlobeControls({
     rotateSpeed={0.25}
     zoomSpeed={0.28}
     minDistance={1.15}
-    maxDistance={5.25}
+    maxDistance={12}
     minPolarAngle={0.35}
     maxPolarAngle={Math.PI - 0.35}
   />;
 }
 
-export function GlobeScene({
+function GlobeSceneComponent({
   autoRotate,
   earthquakes,
   earthquakesVisible,
@@ -121,8 +128,13 @@ export function GlobeScene({
   fires,
   firesVisible,
   selectedFireId,
+  satellites,
+  satellitesVisible,
+  selectedSatelliteId,
   onEarthquakeSelect,
   onFireSelect,
+  onSatelliteSelect,
+  onSelectedSatelliteData,
   onSelectedPositionChange,
   onZoomApiChange,
   onScaleChange,
@@ -135,7 +147,7 @@ export function GlobeScene({
   return (
     <>
       <Canvas
-        camera={{ fov: 30, near: 0.05, far: 10, position: [0.15, 0.22, 4.5] }}
+        camera={{ fov: 30, near: 0.05, far: 25, position: [0.15, 0.22, 4.5] }}
         dpr={[1, 1.5]}
         frameloop="demand"
         gl={{ alpha: true, antialias: true, powerPreference: "high-performance" }}
@@ -163,14 +175,23 @@ export function GlobeScene({
             onSelect={onFireSelect}
             onSelectedPositionChange={onSelectedPositionChange}
           />
+          {satellitesVisible && satellites.length > 0 ? <SatelliteLayer
+            satellites={satellites}
+            selectedId={selectedSatelliteId}
+            onSelect={onSatelliteSelect}
+            onSelectedData={onSelectedSatelliteData}
+            onSelectedPositionChange={onSelectedPositionChange}
+          /> : null}
         </group>
         <ambientLight intensity={RELIEF.ambientIntensity} />
         <directionalLight position={[-3, 4, 5]} intensity={RELIEF.directionalIntensity} />
         <GlobeControls autoRotate={autoRotate} onZoomApiChange={onZoomApiChange} onScaleChange={onScaleChange} />
-        <RenderScheduler active={autoRotate} />
+        <RenderScheduler active={debugEnabled || autoRotate || (satellitesVisible && satellites.length > 0)} />
         {debugEnabled ? <PerformanceProbe activeLod={activeLod} onSample={setPerformance} /> : null}
       </Canvas>
       {debugEnabled ? <PerformancePanel snapshot={performance} /> : null}
     </>
   );
 }
+
+export const GlobeScene = memo(GlobeSceneComponent);
