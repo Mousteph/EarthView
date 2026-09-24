@@ -12,14 +12,16 @@ EarthView is a quiet editorial instrument: a single interactive globe on a warm 
 - Ocean blue: `#0a3554`
 - Land: `#f0efeb`
 - Country lines: `#969590`
-- Earthquakes: `#d96d52`
+- Earthquakes: `#e65342`
 - Active fires: `#f5a23b`
 
 Do not use cool atmospheric glows, drop shadows, satellite imagery, map tiles, or gradients on the globe.
 
 ## Typography and page chrome
 
-Use a tight-tracked geometric sans-serif. Ataero Retina OB is the intended licensed face; until it is available, use the documented Inter/system fallback. The desktop stage has an EarthView masthead, `REAL-TIME EARTH DATA`, live UTC time and status, MAP and DATA navigation, earthquake and fire controls, a live summary, a large two-line `EARTH / VIEW` display at the lower left, and a right-side inspection prompt or selected-event panel. The title sits behind the globe and becomes occluded as it is zoomed. Labels are uppercase, letter-spaced, and deliberately small. Both data layers start off; summary counts appear only after their layer loads. The `/data` page lists the four current data sources without the globe. On narrow screens, reduce the globe stage so controls remain usable. Give the header a full-width parchment veil attached to the top edge and floating controls a brighter, diffuse parchment blur to keep text readable over the globe without looking like cards.
+Use a tight-tracked geometric sans-serif. Ataero Retina OB is the intended licensed face; until it is available, use the documented Inter/system fallback. The desktop stage has an EarthView masthead, `REAL-TIME EARTH DATA`, live UTC time and status, VIEW and DATA navigation, layer controls with inline counts, a large `VIEW.` display at the lower left, and a right-side inspection prompt or selected-event panel. The display title sits behind the globe and becomes occluded as it is zoomed; its dot uses the same orange as `Data sources.`. Labels are uppercase, letter-spaced, and deliberately small. Layers start off, with satellite options collapsed. Selection markers are outlined when off and filled when on. Counts appear beside the names of selected layers and orbital categories after they load; the satellite heading sums only selected, loaded orbital categories. The `/data` page lists the current data sources without the globe. On narrow screens, reduce the globe stage so controls remain usable. Give the header and floating controls nearly opaque parchment backdrops so text stays readable over the globe without heavy cards.
+
+Inspection cards share a heading, primary value, divider, and compact detail rows. Earthquake magnitude uses earthquake red; fire power uses fire orange and confidence appears as a pill. The globe supports drag and wheel zoom without on-screen zoom buttons.
 
 An active earthquake uses a restrained screen-space leader: a fine segmented line running from a ring around the selected marker to the event panel. The selected dark point remains visible inside that ring, and the leader disappears when the marker is not camera-facing.
 
