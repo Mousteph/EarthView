@@ -76,7 +76,7 @@ export default function DataPage() {
           </div>
         </article>)}
       </div>
-      <Link className="back-to-map" href="/">← Back to map</Link>
+      <Link className="back-to-map" href="/">← Back to view</Link>
     </div>
   </main>;
 }
