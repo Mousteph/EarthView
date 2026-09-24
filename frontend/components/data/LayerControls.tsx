@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, type RefObject } from "react";
+import { useEffect, useState, type CSSProperties, type RefObject } from "react";
 import Link from "next/link";
 import type { Earthquake } from "@/lib/earthquakes";
 import type { Fire } from "@/lib/fires";
 import type { OrbitalMode, Satellite, SelectedSatellitePosition } from "@/lib/satellites";
 import type { OrbitalFilterGroup } from "@/lib/orbitalFilters";
+import { missionTypeColor } from "@/lib/orbitalColors";
 
 export type LayerControl = {
   readonly id: "earthquakes" | "fires" | "satellites";
@@ -108,7 +109,7 @@ function EventDetails({ selected, detailsRef, onClose }: {
           <div className="satellite-primary-label">{satellite.name}</div>
           <div className="orbital-primary-badges">
             {selected.mode === "satellites" ? <>
-              {metadata.missionType ? <span className="orbital-info-pill">{metadata.missionType}</span> : null}
+              {metadata.missionType ? <span className="orbital-info-pill orbital-mission-pill" style={{ "--orbital-mission-color": missionTypeColor(metadata.missionType) } as CSSProperties}>{metadata.missionType}</span> : null}
               {metadata.orbitClass ? <span className="orbital-info-pill">{metadata.orbitClass}</span> : null}
               {metadata.constellation ? <span className="orbital-info-pill">{metadata.constellation}</span> : null}
             </> : null}
@@ -201,10 +202,13 @@ function OrbitalLayerOptions({ controls }: { readonly controls: OrbitalControls 
               {openGroups.has(group) ? <div className="orbital-filter-options">
                 {controls.filters[group].map((value) => {
                   const isSelected = controls.selectedFilters[group].includes(value);
+                  const markerStyle = group === "missionTypes"
+                    ? { "--orbital-color": missionTypeColor(value) } as CSSProperties
+                    : undefined;
                   return <button className="orbital-filter-option" type="button" key={value} aria-pressed={isSelected} onClick={() => {
                     const current = controls.selectedFilters[group];
                     controls.onFilterChange(group, isSelected ? current.filter((item) => item !== value) : [...current, value]);
-                  }}><span className="orbital-category-marker" aria-hidden="true" />{value}</button>;
+                  }}><span className="orbital-category-marker" style={markerStyle} aria-hidden="true" />{value}</button>;
                 })}
               </div> : null}
             </section> : null)}
