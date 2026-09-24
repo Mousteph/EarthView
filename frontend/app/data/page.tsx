@@ -28,6 +28,15 @@ const sources = [
   },
   {
     number: "03",
+    category: "Live data",
+    title: "Orbital objects",
+    provider: "CelesTrak",
+    description: "CelesTrak GP orbital elements and SATCAT catalog records supply the available active satellites, debris, and rocket bodies. EarthView propagates positions locally with SGP4. Mission and orbit labels are inferred; debris and rocket-body name searches are not a complete catalog.",
+    href: "https://celestrak.org/satcat/satcat-format.php",
+    linkLabel: "View CelesTrak SATCAT formats",
+  },
+  {
+    number: "04",
     category: "Base geography",
     title: "Land and country borders",
     provider: "Natural Earth",
@@ -36,7 +45,7 @@ const sources = [
     linkLabel: "View Natural Earth data and terms",
   },
   {
-    number: "04",
+    number: "05",
     category: "Base geography",
     title: "Land and seafloor relief",
     provider: "GEBCO Compilation Group (2025), GEBCO 2025 Grid",
