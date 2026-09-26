@@ -1,23 +1,24 @@
 import type { OrbitalMode, Satellite } from "./model";
+import { DESIGN_COLOR_TOKENS, readDesignColor, type DesignColorToken } from "@/shared/designTokens";
 
-const MISSION_COLORS: Readonly<Record<string, string>> = {
-  Communications: "#587b83",
-  Navigation: "#3f7892",
-  Weather: "#6d8f67",
-  "Earth Observation": "#8d70a5",
-  Science: "#b37759",
-  "Space Stations": "#6c7f91",
-  "Data Relay": "#438b91",
-  "Search and Rescue": "#aa8241",
-  "Technology Demonstration": "#a36682",
-  "Military / Surveillance": "#7c745f",
-  "Other / Unclassified": "#85847e",
+const MISSION_COLOR_TOKENS: Readonly<Record<string, DesignColorToken>> = {
+  Communications: DESIGN_COLOR_TOKENS.missionCommunications,
+  Navigation: DESIGN_COLOR_TOKENS.missionNavigation,
+  Weather: DESIGN_COLOR_TOKENS.missionWeather,
+  "Earth Observation": DESIGN_COLOR_TOKENS.missionEarthObservation,
+  Science: DESIGN_COLOR_TOKENS.missionScience,
+  "Space Stations": DESIGN_COLOR_TOKENS.missionSpaceStations,
+  "Data Relay": DESIGN_COLOR_TOKENS.missionDataRelay,
+  "Search and Rescue": DESIGN_COLOR_TOKENS.missionSearchAndRescue,
+  "Technology Demonstration": DESIGN_COLOR_TOKENS.missionTechnologyDemonstration,
+  "Military / Surveillance": DESIGN_COLOR_TOKENS.missionMilitarySurveillance,
+  "Other / Unclassified": DESIGN_COLOR_TOKENS.missionOther,
 };
 
-const MODE_COLORS: Readonly<Record<OrbitalMode, string>> = {
-  active: "#587b83",
-  debris: "#a58558",
-  rocket_bodies: "#b87553",
+const MODE_COLOR_TOKENS: Readonly<Record<OrbitalMode, DesignColorToken>> = {
+  active: DESIGN_COLOR_TOKENS.satellite,
+  debris: DESIGN_COLOR_TOKENS.debris,
+  rocket_bodies: DESIGN_COLOR_TOKENS.rocketBody,
 };
 
 const generatedMissionColors = new Map<string, string>();
@@ -50,10 +51,12 @@ function generatedColor(missionType: string): string {
 }
 
 export function missionTypeColor(missionType: string | null): string {
-  if (!missionType) return MISSION_COLORS["Other / Unclassified"];
-  return MISSION_COLORS[missionType] ?? generatedColor(missionType);
+  const token = MISSION_COLOR_TOKENS[missionType ?? "Other / Unclassified"];
+  return token ? `var(${token})` : generatedColor(missionType!);
 }
 
 export function orbitalObjectColor(object: Pick<Satellite, "missionType"> & { readonly orbitalMode: OrbitalMode }): string {
-  return object.orbitalMode === "active" ? missionTypeColor(object.missionType) : MODE_COLORS[object.orbitalMode];
+  if (object.orbitalMode !== "active") return readDesignColor(MODE_COLOR_TOKENS[object.orbitalMode]);
+  const token = MISSION_COLOR_TOKENS[object.missionType ?? "Other / Unclassified"];
+  return token ? readDesignColor(token) : generatedColor(object.missionType!);
 }

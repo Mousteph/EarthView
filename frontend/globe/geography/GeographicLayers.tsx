@@ -3,7 +3,7 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useState } from "react";
 import { LineBasicMaterial, type Texture } from "three";
-import { readDesignColor } from "@/shared/designTokens";
+import { DESIGN_COLOR_TOKENS, readDesignColor } from "@/shared/designTokens";
 import { CountryBorders } from "./CountryBorders";
 import {
   createGeographyGeometries,
@@ -71,8 +71,8 @@ export function GeographicLayers({ onActiveLodChange, reliefTexture }: Geographi
   });
 
   useEffect(() => {
-    landMaterial.color.set(readDesignColor("--color-land"));
-    borderMaterial.color.set(readDesignColor("--color-country-line"));
+    landMaterial.color.set(readDesignColor(DESIGN_COLOR_TOKENS.land));
+    borderMaterial.color.set(readDesignColor(DESIGN_COLOR_TOKENS.countryLine));
   }, [borderMaterial, landMaterial]);
 
   useEffect(() => {

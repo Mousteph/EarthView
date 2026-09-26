@@ -14,6 +14,7 @@ import { SatelliteLayer } from "./orbital/SatelliteLayer";
 import { GeographicLayers } from "./geography/GeographicLayers";
 import type { GeographicLod } from "./geography/geography";
 import { RELIEF } from "./relief/relief";
+import { DESIGN_COLOR_TOKENS } from "@/shared/designTokens";
 import {
   PerformancePanel,
   PerformanceProbe,
@@ -148,7 +149,7 @@ function GlobeSceneComponent({
             entities={earthquakes}
             selectedId={selectedEarthquakeId}
             visible={earthquakesVisible}
-            color="#e65342"
+            colorToken={DESIGN_COLOR_TOKENS.earthquake}
             ringed
             sizeFor={earthquakeSize}
             onSelect={onEarthquakeSelect}
@@ -158,7 +159,7 @@ function GlobeSceneComponent({
             entities={fires}
             selectedId={selectedFireId}
             visible={firesVisible}
-            color="#f5a23b"
+            colorToken={DESIGN_COLOR_TOKENS.fire}
             sizeFor={fireSize}
             onSelect={onFireSelect}
             onSelectedPositionChange={onSelectedPositionChange}

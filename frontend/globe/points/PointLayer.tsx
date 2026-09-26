@@ -14,12 +14,13 @@ import {
 } from "three";
 import type { GeoEvent } from "@/shared/geoEvent";
 import { geoToVector3 } from "@/globe/geo";
+import { readDesignColor, type DesignColorToken } from "@/shared/designTokens";
 
 type PointLayerProps<T extends GeoEvent> = {
   readonly entities: readonly T[];
   readonly selectedId: string | null;
   readonly visible: boolean;
-  readonly color: string;
+  readonly colorToken: DesignColorToken;
   readonly ringed?: boolean;
   readonly sizeFor: (entity: T) => number;
   readonly onSelect: (id: string) => void;
@@ -126,7 +127,7 @@ export function PointLayer<T extends GeoEvent>({
   entities,
   selectedId,
   visible,
-  color,
+  colorToken,
   ringed = false,
   sizeFor,
   onSelect,
@@ -151,7 +152,6 @@ export function PointLayer<T extends GeoEvent>({
   const markerMaterial = useMemo(
     () => {
       const material = new PointsMaterial({
-        color,
         depthWrite: false,
         size: ringed ? 6.8 : 4.2,
         sizeAttenuation: false,
@@ -178,12 +178,11 @@ export function PointLayer<T extends GeoEvent>({
       material.customProgramCacheKey = () => `earthview-data-points-v3-${ringed}`;
       return material;
     },
-    [color, ringed],
+    [ringed],
   );
   const selectedMaterial = useMemo(
     () => {
       const material = new PointsMaterial({
-        color,
         depthWrite: false,
         size: ringed ? 9.5 : 5.5,
         sizeAttenuation: false,
@@ -209,13 +208,19 @@ export function PointLayer<T extends GeoEvent>({
       material.customProgramCacheKey = () => `earthview-selected-data-points-v3-${ringed}`;
       return material;
     },
-    [color, ringed],
+    [ringed],
   );
 
   useEffect(() => () => geometry.dispose(), [geometry]);
   useEffect(() => () => selectedGeometry?.dispose(), [selectedGeometry]);
   useEffect(() => () => markerMaterial.dispose(), [markerMaterial]);
   useEffect(() => () => selectedMaterial.dispose(), [selectedMaterial]);
+  useEffect(() => {
+    const color = readDesignColor(colorToken);
+    markerMaterial.color.set(color);
+    selectedMaterial.color.set(color);
+    invalidate();
+  }, [colorToken, invalidate, markerMaterial, selectedMaterial]);
   useEffect(() => {
     invalidate();
   }, [geometry, invalidate, selectedGeometry, visible]);

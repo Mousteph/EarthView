@@ -5,13 +5,11 @@ import { EarthViewHeader } from "@/shared/ui/EarthViewHeader";
 import { LayerControls, type LayerControl } from "./LayerControls";
 import { resolveSelection, type SelectedEvent, type SelectionData } from "./selection";
 import { useMapState } from "./useMapState";
+import { useMapLayers } from "./useMapLayers";
 import { GlobeScene, type MapScale } from "@/globe/GlobeScene";
 import type { SelectedPointScreenPosition } from "@/globe/points/PointLayer";
-import { useEarthquakes } from "@/features/earthquakes/useEarthquakes";
-import { useFires } from "@/features/fires/useFires";
-import { composeOrbitalObjects, useOrbitalFeeds } from "@/features/orbital/useOrbitalFeeds";
 import type { OrbitalMode, SelectedSatellitePosition } from "@/features/orbital/model";
-import { orbitalFilterMask, orbitalFilterOptions, orbitalVisibilityMask, visibleOrbitalCount } from "@/features/orbital/filters";
+import { orbitalVisibilityMask } from "@/features/orbital/filters";
 
 export function MapView() {
   const [hasInteracted, setHasInteracted] = useState(false);
@@ -28,27 +26,19 @@ export function MapView() {
   const connectorPathRef = useRef<SVGPathElement>(null);
   const connectorRingRef = useRef<SVGCircleElement>(null);
   const detailsRef = useRef<HTMLElement>(null);
-  const earthquakesData = useEarthquakes();
-  const firesData = useFires();
-  const { active: satellitesData, debris: debrisData, rocketBodies: rocketBodiesData, refreshEnabled } = useOrbitalFeeds(enabledOrbitalModes);
-  const { earthquakes } = earthquakesData;
-  const { fires } = firesData;
-  const satelliteCatalog = satellitesData.satellites;
-  const orbitalObjects = useMemo(() => composeOrbitalObjects(enabledOrbitalModes, {
-    active: satellitesData.satellites, debris: debrisData.satellites, rocket_bodies: rocketBodiesData.satellites,
-  }), [debrisData.satellites, enabledOrbitalModes, rocketBodiesData.satellites, satellitesData.satellites]);
-  const filterOptions = useMemo(() => orbitalFilterOptions(satelliteCatalog), [satelliteCatalog]);
-  const visibleMask = useMemo(() => orbitalVisibilityMask(orbitalObjects, satelliteCatalog, orbitalFilters), [orbitalFilters, orbitalObjects, satelliteCatalog]);
-  const satellitesLoaded = satellitesData.hasLoaded;
-  const debrisLoaded = debrisData.hasLoaded;
-  const rocketBodiesLoaded = rocketBodiesData.hasLoaded;
-  const orbitalSummaryItems = useMemo(() => {
-    return [
-      { id: "active" as const, count: visibleOrbitalCount(orbitalFilterMask(satelliteCatalog, orbitalFilters)), hasLoaded: satellitesLoaded },
-      { id: "debris" as const, count: debrisData.satellites.length, hasLoaded: debrisLoaded },
-      { id: "rocket_bodies" as const, count: rocketBodiesData.satellites.length, hasLoaded: rocketBodiesLoaded },
-    ];
-  }, [debrisData.satellites.length, debrisLoaded, orbitalFilters, rocketBodiesData.satellites.length, rocketBodiesLoaded, satelliteCatalog, satellitesLoaded]);
+  const {
+    earthquakeFeed: earthquakesData,
+    fireFeed: firesData,
+    orbitalFeeds: { active: satellitesData, debris: debrisData, rocketBodies: rocketBodiesData },
+    earthquakes,
+    fires,
+    satelliteCatalog,
+    orbitalObjects,
+    filterOptions,
+    visibleMask,
+    orbitalSummaryItems,
+    refreshSatellites,
+  } = useMapLayers(enabledOrbitalModes, orbitalFilters);
   const selectionData: SelectionData = useMemo(() => ({
     earthquakes, fires, orbitalObjects, orbitalVisibility: visibleMask, earthquakesVisible, firesVisible,
     enabledOrbitalModes, selectedSatellitePosition,
@@ -86,7 +76,7 @@ export function MapView() {
   };
   const refreshEarthquakes = () => void earthquakesData.refresh();
   const refreshFires = () => void firesData.refresh();
-  const refreshSatellites = () => void refreshEnabled();
+  const refreshSatelliteFeeds = () => void refreshSatellites();
 
   const handleEarthquakeSelect = useCallback((id: string) => select({ type: "earthquakes", id }), [select]);
   const handleFireSelect = useCallback((id: string) => select({ type: "fires", id }), [select]);
@@ -110,7 +100,7 @@ export function MapView() {
       isLoading: [satellitesData, debrisData, rocketBodiesData].some((data, index) => enabledOrbitalModes.includes((["active", "debris", "rocket_bodies"] as const)[index]) && data.isLoading),
       error: enabledOrbitalModes.map((mode) => mode === "active" ? satellitesData.error : mode === "debris" ? debrisData.error : rocketBodiesData.error).find(Boolean) ?? null,
       stale: enabledOrbitalModes.some((mode) => mode === "active" ? satellitesData.stale : mode === "debris" ? debrisData.stale : rocketBodiesData.stale),
-      count: orbitalSummaryItems.reduce((sum, item) => sum + (item.hasLoaded && enabledOrbitalModes.includes(item.id) ? item.count : 0), 0), onRefresh: () => void refreshSatellites() },
+      count: orbitalSummaryItems.reduce((sum, item) => sum + (item.hasLoaded && enabledOrbitalModes.includes(item.id) ? item.count : 0), 0), onRefresh: refreshSatelliteFeeds },
   ];
 
   const updateSelectedConnector = useCallback((position: SelectedPointScreenPosition | null) => {

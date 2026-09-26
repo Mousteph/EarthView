@@ -28,7 +28,7 @@ a { color: inherit; }
 
 .stage-wordmark { font-size: clamp(17px, 1.4vw, 24px); font-weight: 750; letter-spacing: 0.18em; text-decoration: none; }
 
-.stage-header-divider { width: 1px; height: 31px; background: #c6c6c4; }
+.stage-header-divider { width: 1px; height: 31px; background: var(--color-header-divider); }
 
 .stage-header-descriptor, .stage-header-dot, .utc-clock, .live-status, .stage-nav { font-size: 12px; font-weight: 650; letter-spacing: 0.18em; }
 
@@ -38,7 +38,7 @@ a { color: inherit; }
 
 .live-status { display: flex; align-items: center; gap: 9px; color: var(--color-muted); }
 
-.live-dot { width: 8px; height: 8px; border-radius: 50%; background: #12a751; }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-live-indicator); }
 
 .stage-nav { gap: clamp(24px, 2.6vw, 43px); }
 
@@ -56,13 +56,13 @@ a { color: inherit; }
 
 .stage-title span { color: var(--color-fire); }
 
-.map-scale { position: absolute; z-index: 10; right: 3.15%; bottom: 4.5%; color: #37393b; font-size: 11px; font-variant-numeric: tabular-nums; pointer-events: none; }
+.map-scale { position: absolute; z-index: 10; right: 3.15%; bottom: 4.5%; color: var(--color-map-scale-text); font-size: 11px; font-variant-numeric: tabular-nums; pointer-events: none; }
 
 .map-scale-labels { display: flex; justify-content: space-between; margin-bottom: 6px; white-space: nowrap; }
 
-.map-scale-rule { display: flex; justify-content: space-between; height: 8px; border-bottom: 1px solid #55585a; }
+.map-scale-rule { display: flex; justify-content: space-between; height: 8px; border-bottom: 1px solid var(--color-map-scale-rule); }
 
-.map-scale-rule i { width: 1px; height: 7px; background: #55585a; }
+.map-scale-rule i { width: 1px; height: 7px; background: var(--color-map-scale-rule); }
 
 .stage-header::before {
   position: absolute;

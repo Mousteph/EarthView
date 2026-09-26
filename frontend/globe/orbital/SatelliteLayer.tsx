@@ -15,6 +15,7 @@ import {
 } from "three";
 import type { OrbitalObject, SelectedSatellitePosition } from "@/features/orbital/model";
 import { recordSatelliteWorkerCalculation, recordSatelliteWorkerCreated, recordSatelliteWorkerInitialization } from "@/features/orbital/performance";
+import { DESIGN_COLOR_TOKENS, readDesignColor } from "@/shared/designTokens";
 import { segmentHiddenByEarth, snapshotAlpha } from "./satelliteMath";
 import { orbitalObjectColor } from "@/features/orbital/colors";
 import type { SelectedPointScreenPosition } from "../points/PointLayer";
@@ -32,7 +33,6 @@ type SatelliteLayerProps = {
 type Snapshot = { first: Float32Array; second: Float32Array; startMs: number; endMs: number };
 
 const pointColors = new Map<string, Color>();
-const DEFAULT_SATELLITE_COLOR = new Color("#587b83");
 
 function colorForObject(satellite: OrbitalObject): Color {
   const color = orbitalObjectColor(satellite);
@@ -44,15 +44,11 @@ function colorForObject(satellite: OrbitalObject): Color {
   return resolved;
 }
 
-function createGeometry(count: number, satellites?: readonly OrbitalObject[]) {
+function createGeometry(count: number) {
   const geometry = new BufferGeometry();
   geometry.setAttribute("position", new BufferAttribute(new Float32Array(count * 3), 3));
   geometry.setAttribute("futurePosition", new BufferAttribute(new Float32Array(count * 3), 3));
   const colors = new Float32Array(count * 3);
-  for (let index = 0; index < count; index += 1) {
-    const color = satellites ? colorForObject(satellites[index]) : DEFAULT_SATELLITE_COLOR;
-    color.toArray(colors, index * 3);
-  }
   geometry.setAttribute("color", new BufferAttribute(colors, 3));
   const filterVisible = new Float32Array(count);
   filterVisible.fill(1);
@@ -60,8 +56,8 @@ function createGeometry(count: number, satellites?: readonly OrbitalObject[]) {
   return geometry;
 }
 
-function createMaterial(color: string, size: number, selected: boolean) {
-  const material = new PointsMaterial({ color, size, sizeAttenuation: false, depthTest: true, depthWrite: false, transparent: true, opacity: selected ? 0.82 : 0.83, vertexColors: !selected });
+function createMaterial(size: number, selected: boolean) {
+  const material = new PointsMaterial({ size, sizeAttenuation: false, depthTest: true, depthWrite: false, transparent: true, opacity: selected ? 0.82 : 0.83, vertexColors: !selected });
   material.userData.interpolationAlpha = { value: 0 };
   material.onBeforeCompile = (shader) => {
     shader.uniforms.interpolationAlpha = material.userData.interpolationAlpha;
@@ -104,7 +100,7 @@ export function SatelliteLayer({ satellites, visibility, selectedId, onSelect, o
   const highlightMaterialRef = useRef<PointsMaterial | null>(null);
   const projected = useMemo(() => new Vector3(), []);
   const cameraPosition = useMemo(() => new Vector3(), []);
-  const geometry = useMemo(() => createGeometry(satellites.length, satellites), [satellites]);
+  const geometry = useMemo(() => createGeometry(satellites.length), [satellites]);
   const orbitElements = useMemo<OrbitalElements[]>(() => satellites.map((satellite) => ({
     id: satellite.id, noradId: satellite.noradId, name: satellite.name, epoch: satellite.epoch,
     meanMotion: satellite.meanMotion, eccentricity: satellite.eccentricity,
@@ -115,9 +111,9 @@ export function SatelliteLayer({ satellites, visibility, selectedId, onSelect, o
     revolutionNumber: satellite.revolutionNumber,
   })), [satellites]);
   const selectedGeometry = useMemo(() => createGeometry(1), []);
-  const material = useMemo(() => createMaterial("#ffffff", 3.4, false), []);
-  const selectedMaterial = useMemo(() => createMaterial("#587b83", 12, true), []);
-  const pathMaterial = useMemo(() => new MeshBasicMaterial({ color: "#587b83", transparent: true, opacity: 0.82, depthTest: true, depthWrite: false }), []);
+  const material = useMemo(() => createMaterial(3.4, false), []);
+  const selectedMaterial = useMemo(() => createMaterial(12, true), []);
+  const pathMaterial = useMemo(() => new MeshBasicMaterial({ transparent: true, opacity: 0.82, depthTest: true, depthWrite: false }), []);
   const [path, setPath] = useState<{ id: string; positions: Float32Array } | null>(null);
   const selectedIndex = useMemo(() => satellites.findIndex((satellite) => satellite.id === selectedId), [satellites, selectedId]);
   const pathGeometry = useMemo(() => path && path.id === selectedId ? (() => {
@@ -135,8 +131,20 @@ export function SatelliteLayer({ satellites, visibility, selectedId, onSelect, o
   useEffect(() => { markerMaterialRef.current = material; }, [material]);
   useEffect(() => { highlightMaterialRef.current = selectedMaterial; }, [selectedMaterial]);
   useEffect(() => {
+    const colors = geometry.getAttribute("color") as BufferAttribute;
+    const values = colors.array as Float32Array;
+    for (let index = 0; index < satellites.length; index += 1) {
+      colorForObject(satellites[index]).toArray(values, index * 3);
+    }
+    colors.needsUpdate = true;
+    material.color.set(readDesignColor(DESIGN_COLOR_TOKENS.white));
+    invalidate();
+  }, [geometry, invalidate, material, satellites]);
+  useEffect(() => {
     const selectedObject = selectedIndex >= 0 ? satellites[selectedIndex] : null;
-    const color = selectedObject ? colorForObject(selectedObject) : DEFAULT_SATELLITE_COLOR;
+    const color = selectedObject
+      ? colorForObject(selectedObject)
+      : new Color(readDesignColor(DESIGN_COLOR_TOKENS.satellite));
     pathMaterial.color.copy(color);
     selectedMaterial.color.copy(color);
     invalidate();
