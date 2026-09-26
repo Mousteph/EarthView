@@ -17,15 +17,15 @@ EarthView displays publicly available data in its geographic context on an inter
 
 Run the backend and frontend in separate terminals.
 
-### 1. Configure the optional fire feed
+### 1. Prepare the local configuration
 
-Earthquakes and satellites can run without a FIRMS key. To load active fires, request a free [NASA FIRMS MAP_KEY](https://firms.modaps.eosdis.nasa.gov/api/area/), then create a local config file at the repository root:
+The backend reads `config.yaml` at startup, so create it from the template if it does not exist:
 
 ```bash
 cp config.example.yaml config.yaml
 ```
 
-Put your key in the `firms.map_key` field in `config.yaml`. This file is gitignored. Never commit or share the key. Restart the backend after changing it. Without a key, `/api/fires` returns HTTP 503 and the other feeds remain available.
+The template placeholder lets the API start and serve the other feeds. To load active fires, request a free [NASA FIRMS MAP_KEY](https://firms.modaps.eosdis.nasa.gov/api/area/) and replace the placeholder in `firms.map_key`. The local file is gitignored; never commit or share the key. Restart the backend after changing it.
 
 ### 2. Start the API
 
@@ -56,6 +56,24 @@ EARTHVIEW_API_ORIGIN=http://127.0.0.1:8010 npm run dev
 ```
 
 The data-source page is at [http://localhost:3000/data](http://localhost:3000/data).
+
+## Run with Docker Compose
+
+Docker and the Compose plugin are required. Ensure a root `config.yaml` exists; if needed, copy `config.example.yaml`. Replace its placeholder with a valid FIRMS MAP_KEY to load active-fire data. Compose mounts this local file read-only into the API container; the key is not copied into either image.
+
+For production mode:
+
+```bash
+docker compose up --build
+```
+
+For development mode with source changes mounted for reload:
+
+```bash
+docker compose -f compose.yaml -f compose.dev.yaml up --build
+```
+
+Both modes serve the frontend at [http://localhost:3000](http://localhost:3000). The frontend reaches the API over Compose’s private network. Satellite cache files persist in a named volume across container restarts. Stop the services with `docker compose down`, using the same `-f` arguments for development mode.
 
 ## Development commands
 

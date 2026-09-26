@@ -66,6 +66,15 @@ python -m unittest discover -s tests
 
 The frontend rewrites `/api/*` to `http://127.0.0.1:8000` by default. Set `EARTHVIEW_API_ORIGIN` before starting Next.js to use another API origin. Keep the frontend and backend processes in separate terminals.
 
+From the repository root, Docker Compose can run the production containers or a development setup with mounted source files:
+
+```bash
+docker compose up --build
+docker compose -f compose.yaml -f compose.dev.yaml up --build
+```
+
+Both modes expect the ignored root `config.yaml`; the API container mounts it read-only and persists satellite cache files in a named volume.
+
 ## Design and implementation rules
 
 - Preserve the implemented editorial globe, colors, typography, panel/control placement, responsive behavior, and motion in [DESIGN.md](DESIGN.md).
