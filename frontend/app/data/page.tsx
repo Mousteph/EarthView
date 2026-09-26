@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { EarthViewHeader } from "@/components/data/LayerControls";
+import { EarthViewHeader } from "@/shared/ui/EarthViewHeader";
 
 export const metadata: Metadata = {
   title: "Data Sources | EarthView",

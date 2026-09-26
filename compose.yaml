@@ -1,0 +1,38 @@
+services:
+  api:
+    build:
+      context: ./backend
+    expose:
+      - "8000"
+    volumes:
+      - type: bind
+        source: ./config.yaml
+        target: /app/config.yaml
+        read_only: true
+      - satellite-cache:/app/backend/.cache
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/docs', timeout=2)
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        EARTHVIEW_API_ORIGIN: http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${EARTHVIEW_WEB_PORT:-3000}:3000"
+    restart: unless-stopped
+
+volumes:
+  satellite-cache:

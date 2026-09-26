@@ -1,0 +1,96 @@
+* { box-sizing: border-box; }
+
+html, body { min-width: 320px; min-height: 100%; margin: 0; }
+
+body { background: var(--color-parchment); color: var(--color-ink); font-family: var(--font-family-sans); }
+
+button, a { -webkit-tap-highlight-color: transparent; }
+
+button { cursor: pointer; }
+
+a { color: inherit; }
+
+.earthview { position: relative; width: 100%; height: 100dvh; min-height: 600px; overflow: hidden; touch-action: none; }
+
+.globe-canvas { position: absolute; z-index: 1; inset: 0; }
+
+.globe-canvas, .globe-canvas > div, .globe-canvas canvas { width: 100%; height: 100%; }
+
+.globe-canvas canvas { display: block; }
+
+.performance-debug { position: fixed; z-index: 20; top: 80px; right: 40px; display: grid; gap: 3px; padding: 10px 12px; background: var(--color-debug-panel); color: var(--color-parchment); font: 10px/1.25 var(--font-family-mono); pointer-events: none; }
+
+.stage-header { position: absolute; z-index: 10; top: 24px; right: 3.15%; left: 3.15%; display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 36px; text-transform: uppercase; isolation: isolate; }
+
+.stage-header-identity, .stage-nav { display: flex; align-items: center; }
+
+.stage-header-identity { gap: clamp(15px, 2vw, 31px); white-space: nowrap; }
+
+.stage-wordmark { font-size: clamp(17px, 1.4vw, 24px); font-weight: 750; letter-spacing: 0.18em; text-decoration: none; }
+
+.stage-header-divider { width: 1px; height: 31px; background: var(--color-header-divider); }
+
+.stage-header-descriptor, .stage-header-dot, .utc-clock, .live-status, .stage-nav { font-size: 12px; font-weight: 650; letter-spacing: 0.18em; }
+
+.stage-header-dot { margin: 0 -3px; }
+
+.utc-clock { color: var(--color-muted); }
+
+.live-status { display: flex; align-items: center; gap: 9px; color: var(--color-muted); }
+
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-live-indicator); }
+
+.stage-nav { gap: clamp(24px, 2.6vw, 43px); }
+
+.stage-nav a { border-bottom: 1px solid transparent; padding: 11px 0 10px; text-decoration: none; }
+
+.stage-nav a[aria-current="page"] { border-bottom-color: var(--color-ink); color: var(--color-ink); }
+
+.stage-nav a:not([aria-current="page"]) { color: var(--color-muted); }
+
+.stage-nav a:hover, .stage-nav a:focus-visible { color: var(--color-ink); }
+
+.stage-title { position: absolute; z-index: 0; bottom: 5.2%; font-size: clamp(76px, 7.1vw, 114px); font-weight: 650; letter-spacing: -0.055em; line-height: 0.76; text-transform: uppercase; pointer-events: none; }
+
+.stage-title-left { left: 3.15%; }
+
+.stage-title span { color: var(--color-fire); }
+
+.map-scale { position: absolute; z-index: 10; right: 3.15%; bottom: 4.5%; color: var(--color-map-scale-text); font-size: 11px; font-variant-numeric: tabular-nums; pointer-events: none; }
+
+.map-scale-labels { display: flex; justify-content: space-between; margin-bottom: 6px; white-space: nowrap; }
+
+.map-scale-rule { display: flex; justify-content: space-between; height: 8px; border-bottom: 1px solid var(--color-map-scale-rule); }
+
+.map-scale-rule i { width: 1px; height: 7px; background: var(--color-map-scale-rule); }
+
+.stage-header::before {
+  position: absolute;
+  z-index: -1;
+  inset: -24px -3.3vw -15px;
+  background: var(--color-panel);
+  content: "";
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  pointer-events: none;
+}
+
+@media (max-width: 1100px) {
+  .stage-header-descriptor, .stage-header-dot { display: none; }
+  .stage-title { font-size: clamp(64px, 7.5vw, 86px); }
+}
+
+@media (max-width: 760px) {
+  .earthview { min-height: 660px; }
+  .globe-canvas { top: 275px; bottom: auto; height: min(54vh, 450px); }
+  .stage-header { top: 17px; right: 20px; left: 20px; align-items: flex-start; }
+  .stage-header::before { inset: -17px -20px -12px; }
+  .stage-header-identity { flex-wrap: wrap; max-width: 240px; column-gap: 12px; row-gap: 5px; }
+  .stage-wordmark { width: 100%; font-size: 17px; }
+  .stage-header-divider { display: none; }
+  .utc-clock, .live-status { font-size: 9px; }
+  .live-dot { width: 6px; height: 6px; }
+  .stage-nav { gap: 16px; font-size: 10px; }
+  .stage-title { bottom: 25px; left: 20px; font-size: clamp(56px, 17vw, 76px); }
+  .map-scale { right: 72px; bottom: 33px; font-size: 9px; }
+}

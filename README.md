@@ -1,16 +1,33 @@
 # EarthView
 
-A minimal React Three Fiber foundation for a real-time Earth visualization. The Next.js application lives in `frontend/`; the repository root is reserved for shared project documentation and future services such as the FastAPI backend.
+EarthView displays publicly available data in its geographic context on an interactive 3D globe.
 
-## Run the frontend locally
+![EarthView interface with earthquake, active-fire, and orbital data loaded and the ISS selected](docs/images/earthview-data-loaded.png)
+
+## What you can explore
+
+| Layer | What it shows |
+| --- | --- |
+| Earthquakes | Recent earthquake locations, magnitude, depth, and event details. |
+| Active fires | Near-real-time fire and thermal hotspot detections. |
+| Orbital objects | Active satellites, debris, and rocket bodies, with filters and object details. |
+| Geographic context | Country geography and land/seafloor relief shown on the globe. |
+
+## Quick start and configuration
+
+Run the backend and frontend in separate terminals.
+
+### 1. Prepare the local configuration
+
+The backend reads `config.yaml` at startup, so create it from the template if it does not exist:
 
 ```bash
-cd frontend
-npm install
-npm run dev
+cp config.example.yaml config.yaml
 ```
 
-## Run the data API locally
+The template placeholder lets the API start and serve the other feeds. To load active fires, request a free [NASA FIRMS MAP_KEY](https://firms.modaps.eosdis.nasa.gov/api/area/) and replace the placeholder in `firms.map_key`. The local file is gitignored; never commit or share the key. Restart the backend after changing it.
+
+### 2. Start the API
 
 ```bash
 cd backend
@@ -20,24 +37,80 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-Active Fires uses NASA FIRMS's global VIIRS NOAA-20 near-real-time Area API for the current UTC day. Request a free [FIRMS MAP_KEY](https://firms.modaps.eosdis.nasa.gov/api/area/), then put the key in `firms.map_key` in `config.yaml` (copy `config.example.yaml` first if the local file is missing). The local `config.yaml` is gitignored; only the template is tracked. Restart the backend after changing it. Without a key, `/api/fires` returns 503. The backend reuses successful FIRMS responses for two minutes. The detection time is the satellite acquisition time, and source FRP is reported in megawatts.
+The API listens on `http://127.0.0.1:8000` by default.
 
-The orbital layer uses CelesTrak GP elements and SATCAT metadata for active satellites and available debris and rocket bodies. FastAPI caches GP elements per mode for at least 2 hours and 5 minutes, and SATCAT for 24 hours. The browser propagates positions with SGP4 in a worker and interpolates five-second snapshots. Enable Satellites on the map, choose a mode, and select an object for its live position and orbit. Satellite mission and constellation labels are inferred where possible; the debris and rocket-body name queries do not cover every cataloged object.
+### 3. Start the frontend
 
-The frontend proxies `/api/*` to `http://127.0.0.1:8000` by default. Set `EARTHVIEW_API_ORIGIN` before starting Next.js to use a different FastAPI origin.
+In a second terminal, from the repository root:
 
-Backend source loading and normalization live in `backend/app/data_layer/`; `backend/app/main.py` exposes the API routes and calls those provider functions.
+```bash
+cd frontend
+npm ci
+npm run dev
+```
 
-The globe keeps ocean, land, country borders, and each normalized data layer as independent rendering primitives.
+Open [http://localhost:3000](http://localhost:3000). The frontend rewrites `/api/*` to `http://127.0.0.1:8000`. To use a different backend origin, set `EARTHVIEW_API_ORIGIN` before starting Next.js, for example:
 
-Land and borders come from the official Natural Earth Admin-0 Countries datasets: [1:50m](https://www.naturalearthdata.com/downloads/50m-cultural-vectors/50m-admin-0-countries-2/) for the global view and [1:10m](https://www.naturalearthdata.com/downloads/10m-cultural-vectors/10m-admin-0-countries/) for close inspection. The GeoJSON is served locally from `frontend/public/data/natural-earth/`; the scene makes no map-tile or satellite-imagery requests. Shared palette and typography tokens are defined in `frontend/styles/design-tokens.css`.
+```bash
+EARTHVIEW_API_ORIGIN=http://127.0.0.1:8010 npm run dev
+```
 
-## Relief data
+The data-source page is at [http://localhost:3000/data](http://localhost:3000/data).
 
-The globe's land and seafloor shading is derived from the [GEBCO 2025 Grid](https://www.gebco.net/data-products-gridded-bathymetry-data/gebco2025-grid), mirrored as a [cloud optimized GeoTIFF by the Australian Antarctic Division](https://source.coop/ausantarctic/gebco). The browser receives only `frontend/public/data/gebco/relief-2048.png` (2048 × 1024, about 2.4 MB compressed and 8 MiB of base GPU texture data). The source DEM is not bundled or requested at runtime. The image stores east and north slopes for land in red/green and for the seafloor in blue/alpha. It has no elevation colors and does not displace the globe. Ocean slopes are blurred more strongly than land slopes to suppress small-scale noise. `frontend/components/globe/relief.ts` holds the independent land, bathymetry, and lighting strengths.
+## Run with Docker Compose
 
-To rebuild the texture, install `numpy`, `scipy`, `Pillow`, and `rasterio` in a Python environment, then run `python scripts/build_relief.py` from the repository root with network access. The script reads GEBCO's downsampled COG overviews and never downloads the multi-gigabyte source file. Output is deterministic for the same source grid and library resampling behavior.
+Docker and the Compose plugin are required. Ensure a root `config.yaml` exists; if needed, copy `config.example.yaml`. Replace its placeholder with a valid FIRMS MAP_KEY to load active-fire data. Compose mounts this local file read-only into the API container; the key is not copied into either image.
 
-Attribution: **GEBCO Compilation Group (2025) GEBCO 2025 Grid**, [doi:10.5285/37c52e96-24ea-67ce-e063-7086abc05f29](https://doi.org/10.5285/37c52e96-24ea-67ce-e063-7086abc05f29). GEBCO places the grid in the public domain and permits adaptation and commercial use, while requiring source acknowledgement and no implication of GEBCO endorsement. Its data are not suitable for navigation or safety at sea. The app includes the attribution on its `/data` references page, linked from the map summary; preserve it in any redistribution.
+For production mode:
 
-In development, append `?debug=1` to display renderer statistics. Production builds omit the panel unless `NEXT_PUBLIC_EARTHVIEW_DEBUG=1` is set at build time, and the query flag is still required.
+```bash
+docker compose up --build
+```
+
+For development mode with source changes mounted for reload:
+
+```bash
+docker compose -f compose.yaml -f compose.dev.yaml up --build
+```
+
+Both modes serve the frontend at [http://localhost:3000](http://localhost:3000). The frontend reaches the API over Compose’s private network. Satellite cache files persist in a named volume across container restarts. Stop the services with `docker compose down`, using the same `-f` arguments for development mode.
+
+## Development commands
+
+Frontend commands run from `frontend/`:
+
+```bash
+npm run typecheck
+npm run lint
+npm run build
+node --test tests/*.test.mjs
+```
+
+Backend tests run from `backend/` with its virtual environment active:
+
+```bash
+python -m unittest discover -s tests
+```
+
+Run the frontend in development with `npm run dev`; run the backend with `uvicorn app.main:app --reload`. Append `?debug=1` to the map route for renderer diagnostics. Production builds include the diagnostics panel only when `NEXT_PUBLIC_EARTHVIEW_DEBUG=1` is set at build time, and the query flag is still required.
+
+## Architecture summary
+
+- `frontend/app/` owns the map and data-source routes.
+- `frontend/features/` owns normalized feature models, feed hooks, map state, filters, controls, and inspection content.
+- `frontend/globe/` owns scene composition, local geography and LOD, relief, the batched point renderer, satellite worker/rendering, and diagnostics.
+- `frontend/shared/` contains utilities and UI pieces used across features, including the earthquake/fire array-feed loader.
+- `frontend/styles/design-tokens.css` is the canonical source for shared colors and visual values; route and control styles consume those tokens.
+- `backend/app/main.py` exposes `/api/earthquakes`, `/api/fires`, and `/api/satellites`; `backend/app/data_layer/` owns provider access, normalization, validation, and caching.
+
+The data path is provider → backend normalization → API response → feature validation and state → typed globe renderer. Earthquakes and fires use the shared array loader; orbital modes retain their own feed lifecycle and specialized worker-backed renderer.
+
+## Data sources
+
+| Provider | Data used | App endpoint or local asset | Freshness, cache, or attribution |
+| --- | --- | --- | --- |
+| [USGS](https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php) | Past-day earthquake events, including location, magnitude, time, and depth | `/api/earthquakes` (backend reads the USGS `summary/all_day.geojson` feed) | Backend fetches and normalizes the upstream feed per request; no backend cache is configured. |
+| [NASA FIRMS](https://firms.modaps.eosdis.nasa.gov/api/area/) | Global VIIRS NOAA-20 near-real-time thermal detections for the current UTC day; includes acquisition time and fire radiative power | `/api/fires` (backend requests the FIRMS Area CSV API) | Requires a local MAP_KEY. Successful responses are cached in process for 120 seconds. |
+| [CelesTrak](https://celestrak.org/satcat/satcat-format.php) | GP orbital elements and SATCAT metadata for active satellites, debris, and rocket bodies | `/api/satellites?mode=active`, `?mode=debris`, or `?mode=rocket_bodies` | Browser refreshes enabled modes every 2 hours 5 minutes. Backend caches GP feeds for 3 hours and SATCAT metadata for 24 hours; cached feeds may be returned as stale after an upstream failure. Positions are propagated locally with SGP4. Debris and rocket-body name queries do not cover every cataloged object. |
+| [Natural Earth](https://www.naturalearthdata.com/about/terms-of-use/) | Admin-0 land and country-border geometry | `frontend/public/data/natural-earth/`: 1:50m global and 1:10m close-inspection assets | Bundled and served locally; see Natural Earth's terms for attribution and use. |
+| [GEBCO Compilation Group](https://www.gebco.net/data-products-gridded-bathymetry-data/gebco2025-grid) | Land and seafloor slope shading derived from GEBCO 2025 Grid | `frontend/public/data/gebco/relief-2048.png` | Derived texture based on GEBCO 2025 Grid; source acknowledgment is required. [Citation](https://doi.org/10.5285/37c52e96-24ea-67ce-e063-7086abc05f29). The grid is not suitable for navigation or safety at sea; GEBCO does not endorse EarthView. |
