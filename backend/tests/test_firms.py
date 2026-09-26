@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from unittest import IsolatedAsyncioTestCase, TestCase
 from unittest.mock import AsyncMock, patch
 
-from app.data_layer.firms import Fire, FireDataLayer
+from app.data_layer.fires import Fire, FireDataLayer
 from app.main import app
 
 
@@ -72,7 +72,7 @@ class FirmsFeedTests(IsolatedAsyncioTestCase):
             layer = FireDataLayer()
         FireDataLayer._cached_fires = None
         FireDataLayer._cache_expires_at = 0.0
-        with patch("app.data_layer.firms.httpx.AsyncClient", return_value=client):
+        with patch("app.data_layer.fires.fire_data_layer.httpx.AsyncClient", return_value=client):
             first = await layer.fetch()
             second = await FireDataLayer().fetch()
 

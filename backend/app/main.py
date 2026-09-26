@@ -1,14 +1,15 @@
 import httpx
 from fastapi import FastAPI, HTTPException, Query, Response
+from typing import Annotated, List
 
 from .data_layer.earthquakes import Earthquake, EarthquakeDataLayer
-from .data_layer.firms import Fire, FireDataLayer
-from .data_layer.satellites import SatelliteFeed, fetch_satellites
-from typing import Annotated, List
+from .data_layer.fires import Fire, FireDataLayer
+from .data_layer.satellites import SatelliteFeed, SatelliteDataLayer
 
 app = FastAPI()
 _earthquake_data_layer = EarthquakeDataLayer()
 _fire_data_layer = FireDataLayer()
+_satellite_data_layer = SatelliteDataLayer()
 
 
 @app.get("/api/earthquakes")
@@ -54,7 +55,7 @@ async def get_satellites(
     mode: Annotated[str, Query(pattern="^(satellites|debris|rocket_bodies)$")] = "satellites"
 ) -> SatelliteFeed:
     try:
-        feed = await fetch_satellites(mode)
+        feed = await _satellite_data_layer.fetch(mode)
     except (httpx.HTTPError, ValueError) as error:
         raise HTTPException(
             status_code=502,

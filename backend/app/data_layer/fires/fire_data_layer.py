@@ -10,25 +10,15 @@ from typing import Dict, List
 
 import httpx
 import yaml
-from pydantic import BaseModel
 
-
-class Fire(BaseModel):
-    id: str
-    lat: float
-    lon: float
-    time: int
-    confidence: str | None
-    frp: float | None
-    satellite: str | None
-    instrument: str | None
+from .models import Fire
 
 
 class FireDataLayer:
     source = "VIIRS_NOAA20_NRT"
     area_url = "https://firms.modaps.eosdis.nasa.gov/api/area/csv"
     cache_seconds = 120
-    config_path = Path(__file__).resolve().parents[3] / "config.yaml"
+    config_path = Path(__file__).resolve().parents[4] / "config.yaml"
     _cache_lock = asyncio.Lock()
     _cached_fires: List[Fire] | None = None
     _cache_expires_at = 0.0
@@ -39,7 +29,6 @@ class FireDataLayer:
             raise RuntimeError("FIRMS map key is not configured in config.yaml")
 
         self.url = f"{self.area_url}/{map_key}/{self.source}/world/1"
-
 
     @classmethod
     def _read_map_key(cls) -> str | None:
@@ -58,10 +47,9 @@ class FireDataLayer:
         firms_config = config.get("firms")
         if not isinstance(firms_config, dict):
             return None
-        
+
         map_key = firms_config.get("map_key")
         return map_key.strip() if isinstance(map_key, str) and map_key.strip() else None
-
 
     @classmethod
     def normalize(cls, row: Dict[str, str]) -> Fire | None:
@@ -99,7 +87,6 @@ class FireDataLayer:
             satellite=row.get("satellite") or None,
             instrument=row.get("instrument") or None,
         )
-
 
     async def fetch(self) -> List[Fire]:
         layer_type = type(self)
