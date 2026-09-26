@@ -9,19 +9,16 @@ from .models import SatelliteFeed
 class SatelliteCache:
     def __init__(
         self,
-        feed_cache_path: Path | None = None,
+        feed_cache_directory: Path | None = None,
         satcat_cache_path: Path | None = None,
     ) -> None:
         cache_directory = Path(__file__).resolve().parents[3] / ".cache"
-        self.feed_cache_path = feed_cache_path or cache_directory / "satellites_active.json"
+        self.feed_cache_directory = feed_cache_directory or cache_directory
         self.satcat_cache_path = satcat_cache_path or cache_directory / "satcat.json"
 
 
     def feed_cache_path_for(self, mode: str) -> Path:
-        if mode == "satellites":
-            return self.feed_cache_path
-
-        return self.feed_cache_path.with_name(f"satellites_{mode}.json")
+        return self.feed_cache_directory / f"satellites_{mode}.json"
 
 
     def load_feed(self, mode: str) -> Tuple[SatelliteFeed | None, int]:
@@ -35,7 +32,8 @@ class SatelliteCache:
             if feed is not None and feed.mode != mode:
                 return None, 0
 
-            return feed, int(payload.get("lastAttemptAt", 0))
+            last_attempt_at = int(payload.get("lastAttemptAt", 0))
+            return feed, last_attempt_at
         except (OSError, ValueError, TypeError, KeyError):
             return None, 0
 

@@ -15,7 +15,7 @@ const MISSION_COLORS: Readonly<Record<string, string>> = {
 };
 
 const MODE_COLORS: Readonly<Record<OrbitalMode, string>> = {
-  satellites: "#587b83",
+  active: "#587b83",
   debris: "#a58558",
   rocket_bodies: "#b87553",
 };
@@ -55,5 +55,5 @@ export function missionTypeColor(missionType: string | null): string {
 }
 
 export function orbitalObjectColor(object: Pick<Satellite, "missionType"> & { readonly orbitalMode: OrbitalMode }): string {
-  return object.orbitalMode === "satellites" ? missionTypeColor(object.missionType) : MODE_COLORS[object.orbitalMode];
+  return object.orbitalMode === "active" ? missionTypeColor(object.missionType) : MODE_COLORS[object.orbitalMode];
 }

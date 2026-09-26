@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Literal
 
 from pydantic import BaseModel
 
@@ -41,7 +41,7 @@ class Satellite(BaseModel):
 
 class SatelliteFeed(BaseModel):
     category: str = "active"
-    mode: str = "satellites"
+    mode: Literal["active", "debris", "rocket_bodies"] = "active"
     fetchedAt: int
     stale: bool = False
     metadataStale: bool = False

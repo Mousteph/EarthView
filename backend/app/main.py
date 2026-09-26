@@ -52,7 +52,7 @@ async def get_fires(response: Response) -> List[Fire]:
 @app.get("/api/satellites")
 async def get_satellites(
     response: Response,
-    mode: Annotated[str, Query(pattern="^(satellites|debris|rocket_bodies)$")] = "satellites"
+    mode: Annotated[str, Query(pattern="^(active|debris|rocket_bodies)$")] = "active"
 ) -> SatelliteFeed:
     try:
         feed = await _satellite_data_layer.fetch(mode)

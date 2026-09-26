@@ -38,7 +38,7 @@ export type Satellite = {
   readonly orbitsPerDay: number | null;
 };
 
-export type OrbitalMode = "satellites" | "debris" | "rocket_bodies";
+export type OrbitalMode = "active" | "debris" | "rocket_bodies";
 
 export type OrbitalObject = Satellite & { readonly orbitalMode: OrbitalMode };
 
@@ -119,12 +119,12 @@ function isPayload(value: unknown, mode: OrbitalMode): value is SatellitesRespon
     && payload.satellites.every(isSatellite);
 }
 
-export function useSatellites(visible: boolean, mode: OrbitalMode = "satellites") {
+export function useSatellites(visible: boolean, mode: OrbitalMode = "active") {
   const [feeds, setFeeds] = useState<Partial<Record<OrbitalMode, SatellitesResponse>>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
-  const lastRequestAt = useRef<Record<OrbitalMode, number>>({ satellites: 0, debris: 0, rocket_bodies: 0 });
+  const lastRequestAt = useRef<Record<OrbitalMode, number>>({ active: 0, debris: 0, rocket_bodies: 0 });
   const data = feeds[mode] ?? null;
 
   const refresh = useCallback(async (): Promise<SatellitesResponse | null> => {

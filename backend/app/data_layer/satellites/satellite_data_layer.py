@@ -14,9 +14,9 @@ class SatelliteDataLayer:
     SECONDS_PER_MINUTE = 60
     MINUTES_PER_HOUR = 60
     HOURS_PER_DAY = 24
-    GP_REFRESH_INTERVAL_SECONDS = 3 * HOURS_PER_DAY * SECONDS_PER_MINUTE * SECONDS_PER_MINUTE
-    SATCAT_REFRESH_INTERVAL_SECONDS = HOURS_PER_DAY * SECONDS_PER_MINUTE * SECONDS_PER_MINUTE
-    modes = {"satellites", "debris", "rocket_bodies"}
+    GP_REFRESH_INTERVAL_SECONDS = 3 * MINUTES_PER_HOUR * SECONDS_PER_MINUTE # 3 hours
+    SATCAT_REFRESH_INTERVAL_SECONDS = HOURS_PER_DAY * SECONDS_PER_MINUTE * SECONDS_PER_MINUTE # 24 hours
+    modes = {"active", "debris", "rocket_bodies"}
 
     def __init__(
         self,
@@ -30,8 +30,9 @@ class SatelliteDataLayer:
         self._refresh_lock = asyncio.Lock()
 
 
-    async def fetch(self, mode: str = "satellites") -> SatelliteFeed:
-        mode = self._normalize_mode(mode)
+    async def fetch(self, mode: str = "active") -> SatelliteFeed:
+        if mode not in self.modes:
+            raise ValueError("Unsupported satellite mode")
 
         async with self._refresh_lock:
             now = self._now_milliseconds()
@@ -64,14 +65,6 @@ class SatelliteDataLayer:
             return feed
 
 
-    @classmethod
-    def _normalize_mode(cls, mode: str) -> str:
-        normalized = "satellites" if mode == "active" else mode
-        if normalized not in cls.modes:
-            raise ValueError("Unsupported satellite mode")
-        return normalized
-
-
     async def _retrieve_and_normalize_records(self, mode: str) -> List[Satellite]:
         records = await self.source.fetch_gp_records(mode)
         try:
@@ -79,7 +72,7 @@ class SatelliteDataLayer:
         except (httpx.HTTPError, ValueError):
             metadata = {}
         
-        if mode == "satellites":
+        if mode == "active":
             satellites = []
             for record in records:
                 satcat_record = metadata.get(self._norad_id(record))

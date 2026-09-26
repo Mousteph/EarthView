@@ -81,24 +81,25 @@ class SatelliteNormalizationTests(TestCase):
 class SatelliteEndpointTests(TestCase):
     def test_preserves_feed_contract_and_all_modes(self) -> None:
         feed = SatelliteFeed(
-            category="active", mode="satellites", fetchedAt=1_790_000_000_000,
+            category="active", mode="active", fetchedAt=1_790_000_000_000,
             satellites=[SatelliteNormalizer.normalize_omm(omm_record())],
         )
         with patch.object(SatelliteDataLayer, "fetch", new=AsyncMock(return_value=feed)) as fetch:
             response = TestClient(app).get("/api/satellites")
-        fetch.assert_awaited_once_with("satellites")
+        fetch.assert_awaited_once_with("active")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers["cache-control"], "no-store")
-        self.assertEqual(response.json()["mode"], "satellites")
+        self.assertEqual(response.json()["mode"], "active")
         self.assertEqual(response.json()["satellites"][0]["meanMotion"], 15.5)
 
-        for mode in ("satellites", "debris", "rocket_bodies"):
+        for mode in ("active", "debris", "rocket_bodies"):
             feed = SatelliteFeed(mode=mode, fetchedAt=1_790_000_000_000, satellites=[])
             with patch.object(SatelliteDataLayer, "fetch", new=AsyncMock(return_value=feed)) as fetch:
                 response = TestClient(app).get("/api/satellites", params={"mode": mode})
             fetch.assert_awaited_once_with(mode)
             self.assertEqual(response.status_code, 200)
         self.assertEqual(TestClient(app).get("/api/satellites", params={"mode": "invalid"}).status_code, 422)
+        self.assertEqual(TestClient(app).get("/api/satellites", params={"mode": "satellites"}).status_code, 422)
 
     def test_returns_bad_gateway_when_feed_is_unavailable(self) -> None:
         with patch.object(SatelliteDataLayer, "fetch", new=AsyncMock(side_effect=httpx.ConnectError("offline"))):
@@ -110,9 +111,10 @@ class SatelliteCacheTests(IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
         root = Path(self.temp_dir.name)
+        self.feed_directory = root
         self.feed_path = root / "satellites_active.json"
         self.satcat_path = root / "satcat.json"
-        self.cache = SatelliteCache(self.feed_path, self.satcat_path)
+        self.cache = SatelliteCache(self.feed_directory, self.satcat_path)
         self.source = CelesTrakClient()
         self.layer = SatelliteDataLayer(source=self.source, cache=self.cache)
 
@@ -124,8 +126,8 @@ class SatelliteCacheTests(IsolatedAsyncioTestCase):
         with patch("app.data_layer.satellites.satellite_data_layer.time.time", return_value=1_800_000_000), \
              patch.object(self.source, "fetch_gp_records", new=AsyncMock(return_value=[omm_record()])) as fetch_gp, \
              patch.object(self.source, "fetch_satcat_records", new=AsyncMock(return_value=catalog)):
-            await self.layer.fetch("satellites")
-            await self.layer.fetch("satellites")
+            await self.layer.fetch("active")
+            await self.layer.fetch("active")
             await self.layer.fetch("debris")
         self.assertEqual(fetch_gp.await_count, 2)
         self.assertTrue(self.feed_path.is_file())
@@ -133,7 +135,7 @@ class SatelliteCacheTests(IsolatedAsyncioTestCase):
 
     async def test_loads_persisted_feed_without_network_request(self) -> None:
         timestamp = 1_800_000_000
-        feed = SatelliteFeed(fetchedAt=timestamp * 1000, satellites=[SatelliteNormalizer.normalize_omm(omm_record())])
+        feed = SatelliteFeed(mode="active", fetchedAt=timestamp * 1000, satellites=[SatelliteNormalizer.normalize_omm(omm_record())])
         self.feed_path.write_text(json.dumps({"feed": feed.model_dump(), "nextAttemptAt": timestamp + 1000, "failureCount": 0}))
         with patch("app.data_layer.satellites.satellite_data_layer.time.time", return_value=timestamp + 1), \
              patch.object(self.source, "fetch_gp_records", new=AsyncMock()) as fetch:
@@ -141,19 +143,20 @@ class SatelliteCacheTests(IsolatedAsyncioTestCase):
         fetch.assert_not_awaited()
         self.assertEqual(loaded.satellites, feed.satellites)
 
-    async def test_loads_legacy_feed_file_and_ignores_retry_fields(self) -> None:
+    async def test_loads_feed_file_with_obsolete_retry_fields(self) -> None:
         timestamp = 1_800_000_000
         record = SatelliteNormalizer.normalize_omm(omm_record()).model_dump()
         for key in ("missionType", "orbitClass", "orbitalPeriodMinutes", "orbitsPerDay", "apogeeKm", "perigeeKm"):
             record.pop(key)
         self.feed_path.write_text(json.dumps({
-            "feed": {"category": "active", "fetchedAt": timestamp * 1000, "satellites": [record]},
+            "feed": {"category": "active", "mode": "active", "fetchedAt": timestamp * 1000, "satellites": [record]},
             "nextAttemptAt": timestamp + 1000,
         }))
         with patch("app.data_layer.satellites.satellite_data_layer.time.time", return_value=timestamp + 1), \
              patch.object(self.source, "fetch_gp_records", new=AsyncMock()) as fetch:
             loaded = await self.layer.fetch()
         fetch.assert_not_awaited()
+        self.assertEqual(loaded.mode, "active")
         self.assertIsNone(loaded.satellites[0].missionType)
         self.assertIsNone(loaded.satellites[0].orbitClass)
 
@@ -163,13 +166,13 @@ class SatelliteCacheTests(IsolatedAsyncioTestCase):
             fetchedAt=(timestamp - self.layer.GP_REFRESH_INTERVAL_SECONDS - 1) * 1000,
             satellites=[SatelliteNormalizer.normalize_omm(omm_record())],
         )
-        self.cache.save_feed("satellites", stale_feed, 0)
+        self.cache.save_feed("active", stale_feed, 0)
         fetch_gp = AsyncMock(return_value=[omm_record()])
         with patch("app.data_layer.satellites.satellite_data_layer.time.time", return_value=timestamp), \
              patch.object(self.source, "fetch_gp_records", new=fetch_gp), \
              patch.object(self.source, "fetch_satcat_records", new=AsyncMock(return_value={})):
             refreshed = await self.layer.fetch()
-        fetch_gp.assert_awaited_once_with("satellites")
+        fetch_gp.assert_awaited_once_with("active")
         self.assertFalse(refreshed.stale)
         self.assertEqual(refreshed.fetchedAt, timestamp * 1000)
 
@@ -179,7 +182,7 @@ class SatelliteCacheTests(IsolatedAsyncioTestCase):
             fetchedAt=(timestamp - self.layer.GP_REFRESH_INTERVAL_SECONDS - 1) * 1000,
             satellites=[SatelliteNormalizer.normalize_omm(omm_record())],
         )
-        self.cache.save_feed("satellites", feed, 0)
+        self.cache.save_feed("active", feed, 0)
         fetch_gp = AsyncMock(side_effect=httpx.ConnectError("offline"))
         with patch("app.data_layer.satellites.satellite_data_layer.time.time", return_value=timestamp), \
              patch.object(self.source, "fetch_gp_records", new=fetch_gp):
@@ -240,7 +243,7 @@ class SatelliteSourceTests(IsolatedAsyncioTestCase):
         requests = []
         source = CelesTrakClient()
         with patch("app.data_layer.satellites.source.httpx.AsyncClient", return_value=Client()):
-            for mode in ("satellites", "debris", "rocket_bodies"):
+            for mode in ("active", "debris", "rocket_bodies"):
                 await source.fetch_gp_records(mode)
         self.assertEqual(requests, [
             {"GROUP": "active", "FORMAT": "JSON"},
@@ -274,17 +277,17 @@ class SatelliteSourceTests(IsolatedAsyncioTestCase):
     async def test_active_feed_defaults_missing_operational_status_to_active(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             source = CelesTrakClient()
-            cache = SatelliteCache(Path(directory) / "feeds.json", Path(directory) / "satcat.json")
+            cache = SatelliteCache(Path(directory), Path(directory) / "satcat.json")
             layer = SatelliteDataLayer(source=source, cache=cache)
             with patch.object(source, "fetch_gp_records", new=AsyncMock(return_value=[omm_record()])), \
                  patch.object(source, "fetch_satcat_records", new=AsyncMock(return_value={25544: {"OPS_STATUS_CODE": ""}})):
-                satellites = await layer._retrieve_and_normalize_records("satellites")
+                satellites = await layer._retrieve_and_normalize_records("active")
             self.assertEqual(satellites[0].operationalStatus, "active")
 
     async def test_debris_and_rocket_modes_require_type_and_current_earth_orbit(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             source = CelesTrakClient()
-            cache = SatelliteCache(Path(directory) / "feeds.json", Path(directory) / "satcat.json")
+            cache = SatelliteCache(Path(directory), Path(directory) / "satcat.json")
             layer = SatelliteDataLayer(source=source, cache=cache)
             records = [omm_record(NORAD_CAT_ID=number, OBJECT_NAME="TEST DEB") for number in range(1, 5)]
             catalog = {

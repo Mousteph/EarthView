@@ -28,7 +28,7 @@ export default function Home() {
   const detailsRef = useRef<HTMLElement>(null);
   const earthquakesData = useEarthquakes();
   const firesData = useFires();
-  const satellitesData = useSatellites(enabledOrbitalModes.includes("satellites"), "satellites");
+  const satellitesData = useSatellites(enabledOrbitalModes.includes("active"), "active");
   const debrisData = useSatellites(enabledOrbitalModes.includes("debris"), "debris");
   const rocketBodiesData = useSatellites(enabledOrbitalModes.includes("rocket_bodies"), "rocket_bodies");
   const { earthquakes } = earthquakesData;
@@ -45,7 +45,7 @@ export default function Home() {
         objects.push({ ...satellite, orbitalMode: mode });
       }
     };
-    addCatalog("satellites", satellitesData.satellites);
+    addCatalog("active", satellitesData.satellites);
     addCatalog("debris", debrisData.satellites);
     addCatalog("rocket_bodies", rocketBodiesData.satellites);
     return objects;
@@ -54,7 +54,7 @@ export default function Home() {
   const visibleMask = useMemo(() => {
     const satelliteMask = orbitalFilterMask(satelliteCatalog, orbitalFilters);
     const satelliteIndexes = new Map(satelliteCatalog.map((satellite, index) => [satellite.id, index]));
-    return Uint8Array.from(orbitalObjects, (object) => object.orbitalMode === "satellites"
+    return Uint8Array.from(orbitalObjects, (object) => object.orbitalMode === "active"
       ? satelliteMask[satelliteIndexes.get(object.id) ?? -1] ?? 0
       : 1);
   }, [orbitalFilters, orbitalObjects, satelliteCatalog]);
@@ -63,7 +63,7 @@ export default function Home() {
   const rocketBodiesLoaded = rocketBodiesData.hasLoaded;
   const orbitalSummaryItems = useMemo(() => {
     return [
-      { id: "satellites" as const, count: visibleOrbitalCount(orbitalFilterMask(satelliteCatalog, orbitalFilters)), hasLoaded: satellitesLoaded },
+      { id: "active" as const, count: visibleOrbitalCount(orbitalFilterMask(satelliteCatalog, orbitalFilters)), hasLoaded: satellitesLoaded },
       { id: "debris" as const, count: debrisData.satellites.length, hasLoaded: debrisLoaded },
       { id: "rocket_bodies" as const, count: rocketBodiesData.satellites.length, hasLoaded: rocketBodiesLoaded },
     ];
@@ -105,7 +105,7 @@ export default function Home() {
 
   const changeOrbitalFilter = (group: OrbitalFilterGroup, values: readonly string[]) => {
     const next = { ...orbitalFilters, [group]: values };
-    if (selection?.type === "satellites" && orbitalObjects.some((object) => object.id === selection.id && object.orbitalMode === "satellites")) {
+    if (selection?.type === "satellites" && orbitalObjects.some((object) => object.id === selection.id && object.orbitalMode === "active")) {
       const index = satelliteCatalog.findIndex((satellite) => satellite.id === selection.id);
       if (index < 0 || !orbitalFilterMask(satelliteCatalog, next)[index]) {
         setSelection(null);
@@ -136,7 +136,7 @@ export default function Home() {
   const refreshSatellites = async () => {
     const refreshes: Partial<Record<OrbitalMode, Awaited<ReturnType<typeof satellitesData.refresh>>>> = {};
     const results = await Promise.all(enabledOrbitalModes.map(async (mode) => {
-      const data = mode === "satellites" ? satellitesData : mode === "debris" ? debrisData : rocketBodiesData;
+      const data = mode === "active" ? satellitesData : mode === "debris" ? debrisData : rocketBodiesData;
       return [mode, await data.refresh()] as const;
     }));
     for (const [mode, result] of results) refreshes[mode] = result;
@@ -145,7 +145,7 @@ export default function Home() {
       const updatedCatalog = selectedMode ? refreshes[selectedMode]?.satellites : null;
       if (updatedCatalog) {
         const index = updatedCatalog.findIndex((satellite) => satellite.id === selection.id);
-        if (index < 0 || (selectedMode === "satellites" && !orbitalFilterMask(updatedCatalog, orbitalFilters)[index])) {
+        if (index < 0 || (selectedMode === "active" && !orbitalFilterMask(updatedCatalog, orbitalFilters)[index])) {
           setSelection((current) => current?.type === "satellites" && current.id === selection.id ? null : current);
           setSelectedSatellitePosition(null);
         }
@@ -172,9 +172,9 @@ export default function Home() {
       count: fires.length, onToggle: toggleFires, onRefresh: () => void refreshFires() },
     { id: "satellites", label: "Satellites", description: "Objects in Earth orbit", visible: satellitesVisible,
       hasLoaded: orbitalSummaryItems.some((item) => item.hasLoaded && enabledOrbitalModes.includes(item.id)),
-      isLoading: [satellitesData, debrisData, rocketBodiesData].some((data, index) => enabledOrbitalModes.includes((["satellites", "debris", "rocket_bodies"] as const)[index]) && data.isLoading),
-      error: enabledOrbitalModes.map((mode) => mode === "satellites" ? satellitesData.error : mode === "debris" ? debrisData.error : rocketBodiesData.error).find(Boolean) ?? null,
-      stale: enabledOrbitalModes.some((mode) => mode === "satellites" ? satellitesData.stale : mode === "debris" ? debrisData.stale : rocketBodiesData.stale),
+      isLoading: [satellitesData, debrisData, rocketBodiesData].some((data, index) => enabledOrbitalModes.includes((["active", "debris", "rocket_bodies"] as const)[index]) && data.isLoading),
+      error: enabledOrbitalModes.map((mode) => mode === "active" ? satellitesData.error : mode === "debris" ? debrisData.error : rocketBodiesData.error).find(Boolean) ?? null,
+      stale: enabledOrbitalModes.some((mode) => mode === "active" ? satellitesData.stale : mode === "debris" ? debrisData.stale : rocketBodiesData.stale),
       count: orbitalSummaryItems.reduce((sum, item) => sum + (item.hasLoaded && enabledOrbitalModes.includes(item.id) ? item.count : 0), 0), onToggle: () => {}, onRefresh: () => void refreshSatellites() },
   ];
 

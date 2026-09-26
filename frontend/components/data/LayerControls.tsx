@@ -80,7 +80,7 @@ function formatCoordinates(latitude: number, longitude: number) {
 }
 
 function formatFirePower(megawatts: number) {
-  return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(megawatts * 1_000_000)} W`;
+  return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(megawatts)} MW`;
 }
 
 function EventDetails({ selected, detailsRef, onClose }: {
@@ -91,10 +91,10 @@ function EventDetails({ selected, detailsRef, onClose }: {
   if (selected.type === "satellites") {
     const { event: satellite, position } = selected;
     const metadata = satellite;
-    const objectLabel = selected.mode === "satellites" ? "Satellite" : selected.mode === "debris" ? "Debris" : "Rocket body";
+    const objectLabel = selected.mode === "active" ? "Satellite" : selected.mode === "debris" ? "Debris" : "Rocket body";
     const operational = metadata.operationalStatus === "active" ? true : metadata.operationalStatus === "inactive" ? false : null;
     const sections: readonly [string, readonly (readonly [string, string | null | undefined])[]][] = [
-      ["Identity", [["NORAD ID", String(satellite.noradId)], ["International designator", metadata.internationalDesignator], ["Object type", metadata.objectType], ["Mission type", selected.mode === "satellites" ? metadata.missionType : null], ["Constellation / group", selected.mode === "satellites" ? metadata.constellation : null]]],
+      ["Identity", [["NORAD ID", String(satellite.noradId)], ["International designator", metadata.internationalDesignator], ["Object type", metadata.objectType], ["Mission type", selected.mode === "active" ? metadata.missionType : null], ["Constellation / group", selected.mode === "active" ? metadata.constellation : null]]],
       ["Ownership", [["Owner / source", metadata.owner], ["Launch date", metadata.launchDate], ["Launch site", metadata.launchSite]]],
       ["Orbit", [["Orbit class", metadata.orbitClass], ["Altitude", position ? `${position.altitudeKm.toFixed(1)} km` : "Calculating"], [metadata.apsidesEstimated ? "Apogee (est.)" : "Apogee", metadata.apogeeKm == null ? null : `${metadata.apogeeKm.toFixed(1)} km`], [metadata.apsidesEstimated ? "Perigee (est.)" : "Perigee", metadata.perigeeKm == null ? null : `${metadata.perigeeKm.toFixed(1)} km`], ["Inclination", `${satellite.inclination.toFixed(2)}°`], ["Period", `${(metadata.orbitalPeriodMinutes ?? 1440 / satellite.meanMotion).toFixed(1)} min`], ["Orbits per day", (metadata.orbitsPerDay ?? satellite.meanMotion).toFixed(2)], ["Velocity", position ? `${position.velocityKmS.toFixed(2)} km/s` : "Calculating"]]],
       ["Position", [["Latitude / longitude", position ? formatCoordinates(position.latitude, position.longitude) : "Calculating"]]],
@@ -108,7 +108,7 @@ function EventDetails({ selected, detailsRef, onClose }: {
         <div className="event-primary">
           <div className="satellite-primary-label">{satellite.name}</div>
           <div className="orbital-primary-badges">
-            {selected.mode === "satellites" ? <>
+            {selected.mode === "active" ? <>
               {metadata.missionType ? <span className="orbital-info-pill orbital-mission-pill" style={{ "--orbital-mission-color": missionTypeColor(metadata.missionType) } as CSSProperties}>{metadata.missionType}</span> : null}
               {metadata.orbitClass ? <span className="orbital-info-pill">{metadata.orbitClass}</span> : null}
               {metadata.constellation ? <span className="orbital-info-pill">{metadata.constellation}</span> : null}
@@ -139,7 +139,7 @@ function EventDetails({ selected, detailsRef, onClose }: {
       <div className="event-details-heading"><span>{isFire ? "Active fire" : "Earthquake"}</span></div>
       <div className="event-primary">
         <div className={isFire ? "fire-primary-label" : "earthquake-primary-label"}>
-          <span className="event-primary-caption">{isFire ? "Power" : "Magnitude"}</span>
+          <span className="event-primary-caption">{isFire ? "Fire Radiative Power" : "Magnitude"}</span>
           <span>{fire ? (fire.frp === null ? "Unavailable" : formatFirePower(fire.frp)) : earthquake?.magnitude.toFixed(1)}</span>
         </div>
         {fire?.confidence ? <div className="orbital-primary-badges"><span className="orbital-info-pill fire-confidence-pill">{fire.confidence} confidence</span></div> : null}
@@ -161,7 +161,7 @@ function OrbitalLayerOptions({ controls, summaryItems }: { readonly controls: Or
   const [openGroups, setOpenGroups] = useState<ReadonlySet<OrbitalFilterGroup>>(() => new Set());
   const groups: readonly [OrbitalFilterGroup, string][] = [["missionTypes", "Mission type"], ["orbitClasses", "Orbit class"], ["constellations", "Constellation / group"]];
   const modes: readonly [OrbitalMode, string, string][] = [
-    ["satellites", "Satellites", "satellite"],
+    ["active", "Active", "satellite"],
     ["debris", "Debris", "debris"],
     ["rocket_bodies", "Rocket Bodies", "rocket-body"],
   ];
@@ -190,11 +190,11 @@ function OrbitalLayerOptions({ controls, summaryItems }: { readonly controls: Or
               <span className="orbital-category-marker" aria-hidden="true" />
               <span>{label}{controls.enabledModes.includes(mode) && summary?.hasLoaded ? <> <output className="orbital-category-count">– {formatCount(summary.count)}</output></> : null}</span>
             </button>
-            {mode === "satellites" ? <button className="orbital-disclosure" type="button" aria-label={(isOpen ? "Collapse " : "Expand ") + label + " filters"} aria-expanded={isOpen} onClick={() => toggleModeOpen(mode)}>
+            {mode === "active" ? <button className="orbital-disclosure" type="button" aria-label={(isOpen ? "Collapse " : "Expand ") + label + " filters"} aria-expanded={isOpen} onClick={() => toggleModeOpen(mode)}>
               <svg className={`orbital-chevron${isOpen ? " is-open" : ""}`} viewBox="0 0 12 12" aria-hidden="true"><path d="m2 4 4 4 4-4" /></svg>
             </button> : null}
           </div>
-          {isOpen && mode === "satellites" ? <div className="orbital-filter-groups">
+          {isOpen && mode === "active" ? <div className="orbital-filter-groups">
             {groups.map(([group, groupLabel]) => controls.filters[group].length ? <section className="orbital-filter-group" key={group}>
               <button className="orbital-filter-heading" type="button" aria-expanded={openGroups.has(group)} onClick={() => toggleGroupOpen(group)}>
                 <span>{groupLabel}</span><svg className={`orbital-chevron${openGroups.has(group) ? " is-open" : ""}`} viewBox="0 0 12 12" aria-hidden="true"><path d="m2 4 4 4 4-4" /></svg>
