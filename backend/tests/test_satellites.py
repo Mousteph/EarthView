@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 from pathlib import Path
 from typing import Dict
@@ -142,6 +143,29 @@ class SatelliteCacheTests(IsolatedAsyncioTestCase):
             loaded = await self.layer.fetch()
         fetch.assert_not_awaited()
         self.assertEqual(loaded.satellites, feed.satellites)
+
+    def test_reuses_validated_feed_until_cache_file_changes(self) -> None:
+        feed = SatelliteFeed(mode="active", fetchedAt=1_800_000_000_000, satellites=[SatelliteNormalizer.normalize_omm(omm_record())])
+        self.feed_path.write_text(json.dumps({"feed": feed.model_dump(), "lastAttemptAt": 123}), encoding="utf-8")
+        with patch("app.data_layer.satellites.caches.json.loads", wraps=json.loads) as load_json:
+            first, first_attempt = self.cache.load_feed("active")
+            second, second_attempt = self.cache.load_feed("active")
+
+        self.assertEqual(first, feed)
+        self.assertIs(second, first)
+        self.assertEqual((first_attempt, second_attempt), (123, 123))
+        load_json.assert_called_once()
+
+        replacement = feed.model_copy(update={"fetchedAt": feed.fetchedAt + 1})
+        temporary = self.feed_path.with_suffix(".replacement")
+        temporary.write_text(json.dumps({"feed": replacement.model_dump(), "lastAttemptAt": 456}), encoding="utf-8")
+        os.replace(temporary, self.feed_path)
+        with patch("app.data_layer.satellites.caches.json.loads", wraps=json.loads) as load_json:
+            updated, updated_attempt = self.cache.load_feed("active")
+        load_json.assert_called_once()
+        self.assertIsNot(updated, feed)
+        self.assertEqual(updated.fetchedAt, replacement.fetchedAt)
+        self.assertEqual(updated_attempt, 456)
 
     async def test_loads_feed_file_with_obsolete_retry_fields(self) -> None:
         timestamp = 1_800_000_000

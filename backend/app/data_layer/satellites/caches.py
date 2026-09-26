@@ -15,6 +15,7 @@ class SatelliteCache:
         cache_directory = Path(__file__).resolve().parents[3] / ".cache"
         self.feed_cache_directory = feed_cache_directory or cache_directory
         self.satcat_cache_path = satcat_cache_path or cache_directory / "satcat.json"
+        self._feed_cache: Dict[str, Tuple[Tuple[int, int, int], SatelliteFeed | None, int]] = {}
 
 
     def feed_cache_path_for(self, mode: str) -> Path:
@@ -22,30 +23,49 @@ class SatelliteCache:
 
 
     def load_feed(self, mode: str) -> Tuple[SatelliteFeed | None, int]:
+        path = self.feed_cache_path_for(mode)
         try:
-            payload = json.loads(self.feed_cache_path_for(mode).read_text(encoding="utf-8"))
+            stat = path.stat()
+        except OSError:
+            self._feed_cache.pop(mode, None)
+            return None, 0
+
+        signature = (stat.st_ino, stat.st_mtime_ns, stat.st_size)
+        cached = self._feed_cache.get(mode)
+        if cached and cached[0] == signature:
+            return cached[1], cached[2]
+
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
             if not isinstance(payload, dict):
+                self._feed_cache.pop(mode, None)
                 return None, 0
 
             feed_payload = payload.get("feed")
             feed = SatelliteFeed.model_validate(feed_payload) if feed_payload is not None else None
             if feed is not None and feed.mode != mode:
+                self._feed_cache.pop(mode, None)
                 return None, 0
 
             last_attempt_at = int(payload.get("lastAttemptAt", 0))
+            self._feed_cache[mode] = (signature, feed, last_attempt_at)
             return feed, last_attempt_at
         except (OSError, ValueError, TypeError, KeyError):
+            self._feed_cache.pop(mode, None)
             return None, 0
 
 
     def save_feed(self, mode: str, feed: SatelliteFeed | None, last_attempt_at: int) -> None:
+        path = self.feed_cache_path_for(mode)
         self._write_json(
-            self.feed_cache_path_for(mode),
+            path,
             {
                 "feed": feed.model_dump() if feed else None,
                 "lastAttemptAt": last_attempt_at,
             },
         )
+        stat = path.stat()
+        self._feed_cache[mode] = ((stat.st_ino, stat.st_mtime_ns, stat.st_size), feed, last_attempt_at)
 
 
     def load_satcat(self) -> Tuple[Dict[int, Dict[str, Any]], int, int]:
