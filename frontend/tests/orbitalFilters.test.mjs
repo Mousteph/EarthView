@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { orbitalFilterMask, orbitalFilterOptions, visibleOrbitalCount } from "../lib/orbitalFilters.ts";
+import { orbitalFilterMask, orbitalFilterOptions, visibleOrbitalCount } from "../features/orbital/filters.ts";
 
 const catalog = [
   { missionType: "Communications", orbitClass: "Low Earth Orbit", constellation: "Starlink" },

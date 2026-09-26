@@ -3,13 +3,16 @@ from fastapi.testclient import TestClient
 from unittest import TestCase
 from unittest.mock import AsyncMock, patch
 
-from app.data_layer.earthquakes import Earthquake, normalize_earthquake
+from app.data_layer.earthquakes import Earthquake, EarthquakeDataLayer
 from app.main import app
 
 
 class NormalizeEarthquakeTests(TestCase):
+    def setUp(self) -> None:
+        self.data_layer = EarthquakeDataLayer()
+
     def test_normalizes_usgs_feature(self) -> None:
-        earthquake = normalize_earthquake({
+        earthquake = self.data_layer.normalize({
             "id": "us7000example",
             "properties": {
                 "mag": 4.2,
@@ -34,7 +37,7 @@ class NormalizeEarthquakeTests(TestCase):
         )
 
     def test_skips_incomplete_feature(self) -> None:
-        self.assertIsNone(normalize_earthquake({"id": "missing-fields"}))
+        self.assertIsNone(self.data_layer.normalize({"id": "missing-fields"}))
 
 
 class EarthquakeEndpointTests(TestCase):
@@ -55,7 +58,7 @@ class EarthquakeEndpointTests(TestCase):
             ),
         ]
 
-        with patch("app.main.fetch_earthquakes", new=AsyncMock(return_value=earthquakes)):
+        with patch.object(EarthquakeDataLayer, "fetch", new=AsyncMock(return_value=earthquakes)):
             response = self.client.get("/api/earthquakes")
 
         self.assertEqual(response.status_code, 200)
@@ -64,7 +67,7 @@ class EarthquakeEndpointTests(TestCase):
 
     def test_returns_bad_gateway_when_upstream_is_unavailable(self) -> None:
         with patch(
-            "app.main.fetch_earthquakes",
+            "app.main.EarthquakeDataLayer.fetch",
             new=AsyncMock(side_effect=httpx.ConnectError("USGS unavailable")),
         ):
             response = self.client.get("/api/earthquakes")

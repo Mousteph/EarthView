@@ -7,7 +7,7 @@ import {
   orbitPeriodMinutes,
   segmentHiddenByEarth,
   snapshotAlpha,
-} from "../lib/satelliteMath.ts";
+} from "../globe/orbital/satelliteMath.ts";
 
 test("maps Earth-fixed coordinates to the globe axes", () => {
   assert.deepEqual(earthFixedToGlobe(EARTH_RADIUS_KM, 0, 0), [0, 0, 1]);
