@@ -35,7 +35,7 @@ export type SelectedPointScreenPosition = {
 };
 
 const markerRadius = 1.012;
-const pickingThreshold = 0.014;
+const pointPickRadiusPixels = 3;
 
 function createPointGeometry(points: readonly Vector3[], sizes?: readonly number[]) {
   const geometry = new BufferGeometry();
@@ -43,30 +43,6 @@ function createPointGeometry(points: readonly Vector3[], sizes?: readonly number
   if (sizes) geometry.setAttribute("markerSize", new Float32BufferAttribute(sizes, 1));
   geometry.computeBoundingSphere();
   return geometry;
-}
-
-function raycastPoints(
-  this: Points,
-  raycaster: Raycaster,
-  intersections: Intersection[],
-) {
-  const previousThreshold = raycaster.params.Points.threshold;
-  const candidates: Intersection[] = [];
-  try {
-    raycaster.params.Points.threshold = pickingThreshold;
-    Points.prototype.raycast.call(this, raycaster, candidates);
-  } finally {
-    raycaster.params.Points.threshold = previousThreshold;
-  }
-
-  const cameraPosition = raycaster.ray.origin;
-  const visibleCandidates = candidates.filter((candidate) =>
-    candidate.point.clone().normalize().dot(cameraPosition.clone().sub(candidate.point)) > 0,
-  );
-  visibleCandidates.sort(
-    (left, right) => (left.distanceToRay ?? Infinity) - (right.distanceToRay ?? Infinity),
-  );
-  if (visibleCandidates[0]) intersections.push(visibleCandidates[0]);
 }
 
 function SelectedPointProjection({
@@ -133,7 +109,7 @@ export function PointLayer<T extends GeoEvent>({
   onSelect,
   onSelectedPositionChange,
 }: PointLayerProps<T>) {
-  const invalidate = useThree((state) => state.invalidate);
+  const { camera, invalidate, size } = useThree();
   const layer = useRef<Group>(null);
   const positions = useMemo(
     () => entities.map((entity) => geoToVector3([entity.lon, entity.lat], markerRadius)),
@@ -144,6 +120,35 @@ export function PointLayer<T extends GeoEvent>({
     [entities, ringed, sizeFor],
   );
   const geometry = useMemo(() => createPointGeometry(positions, sizes), [positions, sizes]);
+  const raycast = useMemo(() => function raycastPoints(
+    this: Points,
+    raycaster: Raycaster,
+    intersections: Intersection[],
+  ) {
+    const previousThreshold = raycaster.params.Points.threshold;
+    const cameraDepth = Math.max(camera.near, camera.position.length() - markerRadius);
+    const zoom = "zoom" in camera ? camera.zoom : 1;
+    const viewportHeight = Math.max(size.height, 1);
+    const worldHeight = "fov" in camera
+      ? 2 * cameraDepth * Math.tan(camera.fov * Math.PI / 360) / zoom
+      : (camera.top - camera.bottom) / zoom;
+    const candidates: Intersection[] = [];
+    try {
+      raycaster.params.Points.threshold = worldHeight / viewportHeight * pointPickRadiusPixels;
+      Points.prototype.raycast.call(this, raycaster, candidates);
+    } finally {
+      raycaster.params.Points.threshold = previousThreshold;
+    }
+
+    const cameraPosition = raycaster.ray.origin;
+    const visibleCandidates = candidates.filter((candidate) =>
+      candidate.point.clone().normalize().dot(cameraPosition.clone().sub(candidate.point)) > 0,
+    );
+    visibleCandidates.sort(
+      (left, right) => (left.distanceToRay ?? Infinity) - (right.distanceToRay ?? Infinity),
+    );
+    if (visibleCandidates[0]) intersections.push(visibleCandidates[0]);
+  }, [camera, size.height]);
   const selectedIndex = entities.findIndex((entity) => entity.id === selectedId);
   const selectedGeometry = useMemo(
     () => selectedIndex < 0 ? null : createPointGeometry([positions[selectedIndex]], [sizes[selectedIndex]]),
@@ -241,7 +246,7 @@ export function PointLayer<T extends GeoEvent>({
       <points
         geometry={geometry}
         material={markerMaterial}
-        raycast={raycastPoints}
+        raycast={raycast}
         onClick={handleClick}
         renderOrder={2}
       />

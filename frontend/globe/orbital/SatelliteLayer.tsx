@@ -33,6 +33,8 @@ type SatelliteLayerProps = {
 type Snapshot = { first: Float32Array; second: Float32Array; startMs: number; endMs: number };
 
 const pointColors = new Map<string, Color>();
+const satellitePickRadiusPixels = 3;
+const dragThresholdPixels = 5;
 
 function colorForObject(satellite: OrbitalObject): Color {
   const color = orbitalObjectColor(satellite);
@@ -222,7 +224,39 @@ export function SatelliteLayer({ satellites, visibility, selectedId, onSelect, o
 
   useEffect(() => {
     const canvas = gl.domElement;
+    let activePointer: { id: number; x: number; y: number; dragged: boolean } | null = null;
+    let suppressClickAfterDrag = false;
+    const updatePointerMovement = (event: PointerEvent) => {
+      if (!activePointer || activePointer.id !== event.pointerId) return;
+      if ((event.clientX - activePointer.x) ** 2 + (event.clientY - activePointer.y) ** 2 > dragThresholdPixels ** 2) {
+        activePointer.dragged = true;
+      }
+    };
+    const handlePointerDown = (event: PointerEvent) => {
+      activePointer = { id: event.pointerId, x: event.clientX, y: event.clientY, dragged: false };
+      suppressClickAfterDrag = false;
+    };
+    const handlePointerMove = (event: PointerEvent) => updatePointerMovement(event);
+    const handlePointerUp = (event: PointerEvent) => {
+      updatePointerMovement(event);
+      if (activePointer?.id === event.pointerId) {
+        suppressClickAfterDrag = activePointer.dragged;
+        activePointer = null;
+      }
+    };
+    const handlePointerCancel = (event: PointerEvent) => {
+      if (activePointer?.id === event.pointerId) {
+        suppressClickAfterDrag = true;
+        activePointer = null;
+      }
+    };
     const pick = (event: MouseEvent) => {
+      if (suppressClickAfterDrag) {
+        suppressClickAfterDrag = false;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
       if (!group.current || !snapshot.current) return;
       const bounds = canvas.getBoundingClientRect();
       const clickX = event.clientX - bounds.left;
@@ -253,7 +287,10 @@ export function SatelliteLayer({ satellites, visibility, selectedId, onSelect, o
         const screenX = (projected.x + 1) * bounds.width * 0.5;
         const screenY = (1 - projected.y) * bounds.height * 0.5;
         const distance = (screenX - clickX) ** 2 + (screenY - clickY) ** 2;
-        if (distance <= 64 && (distance < bestDistance || (distance === bestDistance && depth < bestDepth))) {
+        if (
+          distance <= satellitePickRadiusPixels ** 2
+          && (distance < bestDistance || (distance === bestDistance && depth < bestDepth))
+        ) {
           bestIndex = index;
           bestDistance = distance;
           bestDepth = depth;
@@ -263,8 +300,18 @@ export function SatelliteLayer({ satellites, visibility, selectedId, onSelect, o
       event.stopPropagation();
       onSelectRef.current(satellites[bestIndex].id);
     };
+    canvas.addEventListener("pointerdown", handlePointerDown, true);
+    canvas.addEventListener("pointermove", handlePointerMove, true);
+    canvas.addEventListener("pointerup", handlePointerUp, true);
+    canvas.addEventListener("pointercancel", handlePointerCancel, true);
     canvas.addEventListener("click", pick, true);
-    return () => canvas.removeEventListener("click", pick, true);
+    return () => {
+      canvas.removeEventListener("pointerdown", handlePointerDown, true);
+      canvas.removeEventListener("pointermove", handlePointerMove, true);
+      canvas.removeEventListener("pointerup", handlePointerUp, true);
+      canvas.removeEventListener("pointercancel", handlePointerCancel, true);
+      canvas.removeEventListener("click", pick, true);
+    };
   }, [camera, cameraPosition, gl, projected, satellites, visibility]);
 
   useFrame(() => {
