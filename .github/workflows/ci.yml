@@ -36,9 +36,11 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v6
+      - name: Create local API configuration
+        run: cp ../config.example.yaml ../config.yaml
       - uses: actions/setup-python@v7
         with:
-          python-version-file: .python-version
+          python-version-file: backend/.python-version
           cache: pip
           cache-dependency-path: backend/requirements.txt
       - run: python -m pip install -r requirements.txt
