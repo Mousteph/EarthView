@@ -2,6 +2,8 @@
 
 EarthView displays publicly available data in its geographic context on an interactive 3D globe.
 
+EarthView-authored code is released under the MIT License. Bundled data, assets, and dependencies retain their own terms; the source and attribution for bundled data are summarized below and on the [data-source page](http://localhost:3000/data) when the app is running.
+
 ![EarthView interface with earthquake, active-fire, and orbital data loaded and the ISS selected](docs/images/earthview-data-loaded.png)
 
 ## What you can explore
@@ -16,6 +18,8 @@ EarthView displays publicly available data in its geographic context on an inter
 ## Quick start and configuration
 
 Run the backend and frontend in separate terminals.
+
+The supported development versions are **Node.js 22** and **Python 3.14**. The matching version files are `.nvmrc` and `backend/.python-version`.
 
 ### 1. Prepare the local configuration
 
@@ -75,6 +79,8 @@ docker compose -f compose.yaml -f compose.dev.yaml up --build
 
 Both modes serve the frontend at [http://localhost:3000](http://localhost:3000). The frontend reaches the API over Compose’s private network. Satellite cache files persist in a named volume across container restarts. Stop the services with `docker compose down`, using the same `-f` arguments for development mode.
 
+Compose exposes the frontend on port 3000 and keeps the API private to the Compose network. The API has no authentication or rate limiting; operators who expose it beyond a trusted network should add controls at their deployment edge.
+
 ## Development commands
 
 Frontend commands run from `frontend/`:
@@ -115,4 +121,14 @@ The data path is provider → backend normalization → API response → feature
 | [Natural Earth](https://www.naturalearthdata.com/about/terms-of-use/) | Land, coastlines, lakes, minor islands, and Admin-0 boundaries | `frontend/public/data/natural-earth/`: 1:50m global and 1:10m close-inspection assets | Bundled and served locally; see Natural Earth's terms for attribution and use. Regional supplementary data is not included. |
 | [GEBCO Bathymetric Compilation Group (2026)](https://www.gebco.net/data-products-gridded-bathymetry-data/gebco2026-grid) | Land and seafloor slope shading derived from the GEBCO_2026 Grid | `frontend/public/data/gebco/relief-4096.ktx2` | Derived 4096×2048 texture based on a globally sampled GEBCO_2026 elevation grid. [Citation](https://doi.org/10.5285/4f68d5c7-45eb-f999-e063-7086abc036fa). The grid is not suitable for navigation or safety at sea; GEBCO does not endorse EarthView. |
 
+The globe also bundles the Basis Universal transcoder files distributed with Three.js. Basis Universal is licensed under Apache-2.0; its license text is included at [`frontend/public/basis/LICENSE-Apache-2.0.txt`](frontend/public/basis/LICENSE-Apache-2.0.txt). Other application dependencies retain the licenses declared by their respective projects; see the frontend lockfile and backend requirements for the dependency lists.
+
 Regenerate the relief asset with `python scripts/build_relief.py` after installing Python `numpy`, `Pillow`, and `scipy`, plus the Khronos KTX Software `ktx` command. Set `KTX_CLI` if `ktx` is not on `PATH`. The script requests a globally sampled elevation subset from GEBCO's CEDA OPeNDAP service and writes the compressed texture with a full mip chain; the full 7 GB grid is not downloaded by the app.
+
+## Contributing and security
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and pull request guidance, [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community expectations, and [SECURITY.md](SECURITY.md) for private vulnerability reporting.
+
+## License
+
+The [MIT License](LICENSE) covers EarthView-authored code. It does not relicense bundled data, assets, or dependencies; retain the source credits and notices above when redistributing them.

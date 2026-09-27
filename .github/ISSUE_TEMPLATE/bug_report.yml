@@ -1,0 +1,36 @@
+name: Bug report
+description: Report a reproducible problem in EarthView.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Check existing issues first. Do not include credentials or private information.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the problem and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: Include the route, layer, and interaction that triggers the problem.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser/OS, or Docker and Compose versions where relevant.
+    validations:
+      required: false
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots or logs
+      description: Remove keys, personal data, and unrelated sensitive values before sharing.
+    validations:
+      required: false
