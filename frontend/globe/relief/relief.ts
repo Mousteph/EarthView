@@ -7,7 +7,7 @@ import {
 } from "three";
 
 export const RELIEF = {
-  texturePath: "/data/gebco/relief-2048.png",
+  texturePath: "/data/gebco/relief-4096.ktx2",
   landStrength: 0.85,
   bathymetryStrength: 0.65,
   ambientIntensity: 2.5,
@@ -49,7 +49,8 @@ export function createReliefMaterial(texture: Texture, surface: "land" | "ocean"
         vec2 reliefSlope = texture2D(reliefMap, reliefUv).${channels} * 2.0 - 1.0;
         vec3 east = normalize(vReliefEast);
         vec3 north = normalize(vReliefNorth);
-        normal = normalize(normal - reliefStrength * (east * reliefSlope.x + north * reliefSlope.y));`,
+        normal = normalize(normal - reliefStrength * (east * reliefSlope.x + north * reliefSlope.y));
+        ${surface === "land" ? "diffuseColor.rgb *= 1.0 - min(length(reliefSlope) * 0.28, 0.34);" : ""}`,
       );
   };
   material.customProgramCacheKey = () => `earthview-relief-${surface}-v1`;

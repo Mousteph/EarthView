@@ -2,9 +2,10 @@
 
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useState } from "react";
-import { LineBasicMaterial, type Texture } from "three";
+import { LineBasicMaterial, MeshBasicMaterial, type Texture } from "three";
 import { DESIGN_COLOR_TOKENS, readDesignColor } from "@/shared/designTokens";
 import { CountryBorders } from "./CountryBorders";
+import { Coastlines } from "./Coastlines";
 import {
   createGeographyGeometries,
   GEOGRAPHY_LOD_THRESHOLDS,
@@ -12,6 +13,7 @@ import {
   type GeographicLod,
 } from "./geography";
 import { Land } from "./Land";
+import { Lakes } from "./Lakes";
 import { createReliefMaterial } from "../relief/relief";
 
 type GeographicLayersProps = {
@@ -27,6 +29,7 @@ export function GeographicLayers({ onActiveLodChange, reliefTexture }: Geographi
   const [requestedLod, setRequestedLod] = useState<GeographicLod>("50m");
   const [geometries, setGeometries] = useState<GeographyGeometries | null>(null);
   const landMaterial = useMemo(() => createReliefMaterial(reliefTexture, "land"), [reliefTexture]);
+  const lakeMaterial = useMemo(() => new MeshBasicMaterial(), []);
   const borderMaterial = useMemo(() => {
     const material = new LineBasicMaterial({
       depthTest: false,
@@ -72,8 +75,9 @@ export function GeographicLayers({ onActiveLodChange, reliefTexture }: Geographi
 
   useEffect(() => {
     landMaterial.color.set(readDesignColor(DESIGN_COLOR_TOKENS.land));
+    lakeMaterial.color.set(readDesignColor(DESIGN_COLOR_TOKENS.ocean));
     borderMaterial.color.set(readDesignColor(DESIGN_COLOR_TOKENS.countryLine));
-  }, [borderMaterial, landMaterial]);
+  }, [borderMaterial, lakeMaterial, landMaterial]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -96,6 +100,8 @@ export function GeographicLayers({ onActiveLodChange, reliefTexture }: Geographi
   useEffect(
     () => () => {
       geometries?.land.dispose();
+      geometries?.lakes.dispose();
+      geometries?.coastlines.dispose();
       geometries?.borders.dispose();
     },
     [geometries],
@@ -104,9 +110,10 @@ export function GeographicLayers({ onActiveLodChange, reliefTexture }: Geographi
   useEffect(
     () => () => {
       landMaterial.dispose();
+      lakeMaterial.dispose();
       borderMaterial.dispose();
     },
-    [borderMaterial, landMaterial],
+    [borderMaterial, lakeMaterial, landMaterial],
   );
 
   if (!geometries) return null;
@@ -114,7 +121,9 @@ export function GeographicLayers({ onActiveLodChange, reliefTexture }: Geographi
   return (
     <>
       <Land geometry={geometries.land} material={landMaterial} />
+      <Lakes geometry={geometries.lakes} material={lakeMaterial} />
       <CountryBorders geometry={geometries.borders} material={borderMaterial} />
+      <Coastlines geometry={geometries.coastlines} material={borderMaterial} />
     </>
   );
 }

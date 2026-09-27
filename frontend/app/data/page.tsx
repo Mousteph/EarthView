@@ -38,9 +38,9 @@ const sources = [
   {
     number: "04",
     category: "Base geography",
-    title: "Land and country borders",
+    title: "Land, lakes, islands, and borders",
     provider: "Natural Earth",
-    description: "Locally bundled Admin-0 Countries data provides the land and border geometry. The globe uses 1:50m data globally and 1:10m data for close inspection.",
+    description: "Locally bundled Natural Earth physical and boundary data provides global land, coastline, lake, island, and country-border geometry. The globe uses 1:50m data globally and 1:10m data for close inspection, with minor islands included at close range.",
     href: "https://www.naturalearthdata.com/about/terms-of-use/",
     linkLabel: "View Natural Earth data and terms",
   },
@@ -48,10 +48,10 @@ const sources = [
     number: "05",
     category: "Base geography",
     title: "Land and seafloor relief",
-    provider: "GEBCO Compilation Group (2025), GEBCO 2025 Grid",
-    description: "EarthView derives its local land and seafloor shading texture from the GEBCO 2025 Grid. GEBCO does not endorse EarthView; the grid is not suitable for navigation or safety at sea.",
-    href: "https://doi.org/10.5285/37c52e96-24ea-67ce-e063-7086abc05f29",
-    linkLabel: "View GEBCO 2025 Grid citation",
+    provider: "GEBCO Bathymetric Compilation Group (2026), GEBCO_2026 Grid",
+    description: "EarthView derives its local land and seafloor slope-shading texture from the GEBCO_2026 Grid at 15 arc-second intervals. GEBCO does not endorse EarthView; the grid is not suitable for navigation or safety at sea.",
+    href: "https://doi.org/10.5285/4f68d5c7-45eb-f999-e063-7086abc036fa",
+    linkLabel: "View GEBCO_2026 Grid citation",
   },
 ] as const;
 

@@ -30,9 +30,9 @@ Selection is visible only while the selected item exists, its layer or orbital m
 
 ## Globe and geography
 
-Use the locally bundled Natural Earth Admin-0 country data for both land and borders: 1:50m for the global view and 1:10m for close inspection. Prepare each ring once and share its vertices between the land boundary and border so they remain aligned. Keep ocean, land, and borders as separate meshes. Ocean radius is `1.0`; land and borders use `1.0015` to avoid z-fighting. Borders do not write depth and render only on the camera-facing hemisphere. Preserve outward-facing land triangles and avoid slope-based polygon offset near the globe limb.
+Use locally bundled Natural Earth physical layers for land, coastline, lakes, and minor islands, with Admin-0 boundary lines separate from coastlines: 1:50m for the global view and 1:10m for close inspection. Minor islands join the 10m land mesh. Lakes are a separate water-colored surface. Keep ocean, land, lakes, coastlines, and political borders as distinct geometry. Ocean radius is `1.0`; land and borders use `1.0015` and lakes use `1.00155` to avoid z-fighting. Lines do not write depth and render only on the camera-facing hemisphere. Preserve outward-facing land triangles and avoid slope-based polygon offset near the globe limb.
 
-LOD enters 1:10m below camera distance `2.15` and returns to 1:50m above `2.45`; this hysteresis prevents rapid switching around the boundary. Keep the GEBCO-derived local relief texture as surface shading rather than elevation-colored or displaced terrain. Preserve source attribution and the navigation/safety disclaimer on the data references page.
+LOD enters 1:10m below camera distance `2.15` and returns to 1:50m above `2.45`; this hysteresis prevents rapid switching around the boundary for all geography layers. Keep the globally bundled GEBCO_2026-derived KTX2 relief texture as surface shading rather than elevation-colored or displaced terrain. Preserve source attribution and the navigation/safety disclaimer on the data references page.
 
 ## Rendering conventions
 
