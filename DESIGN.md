@@ -1,47 +1,34 @@
 # EarthView design reference
 
-## Product direction
+Read this guide before changing the globe's visual treatment, geography, camera behavior, controls, or responsive layout. Keep the experience an editorial instrument for inspecting current Earth data: the Earth and its data lead; controls and detail panels remain quiet and legible.
 
-EarthView is a quiet editorial instrument for exploring current Earth data through one interactive globe. The visual hierarchy belongs to the Earth and its data; controls and inspection content stay restrained, readable, and out of the way. The current map shows earthquakes, active fires, and orbital objects. A future layer should follow the established system without being presented as implemented before it ships.
+## Visual system
 
-Use a custom graphical globe rather than a conventional slippy map. Keep the Earth warm and monochrome with deep blue oceans and restrained relief; event and orbital marks supply most of the brighter color. Do not add photorealistic imagery, map tiles, an atmosphere halo, decorative concentric circles, heavy shadows, or ornamental gradients.
+- Preserve the custom 3D globe, warm monochrome land, deep blue ocean, restrained relief, and brighter data marks.
+- Keep existing panel placement, typography, responsive behavior, motion, and interaction. The map is a full-screen stage; `/data` is the separate text-forward source page.
+- Use `frontend/styles/design-tokens.css` as the canonical source for fixed colors, typography, and shared visual values. Use semantic CSS tokens and the typed bridge in `frontend/shared/designTokens.ts` for Three.js colors. Resolve CSS values on the client after mount.
+- Keep the current visual hierarchy and palette unless a visual redesign is explicitly requested. Review any token change on both the map and data routes.
+- Unknown orbital categories may keep deterministic generated colors.
 
-## Canonical visual values
-
-`frontend/styles/design-tokens.css` is the canonical source for fixed frontend colors, typography, and shared visual values. Use its semantic custom properties in CSS. Three.js materials use the typed bridge in `frontend/shared/designTokens.ts`, with color resolution after mount. Do not duplicate fixed color literals in route styles or renderer color maps.
-
-Token groups cover parchment and ink surfaces, geography, dividers and text, live/error/status states, earthquake/fire/orbital categories, mission categories, and debug panels. Unknown orbital categories may continue to use deterministic generated colors. Keep the existing token values when changing structure; a palette change should update the shared tokens and be visually reviewed across both routes.
-
-Typography uses the shared sans and monospace tokens. The desktop header carries the EarthView wordmark, `REAL-TIME EARTH DATA`, UTC clock/status, and VIEW/DATA navigation. Labels remain compact, uppercase, and letter-spaced. The large `VIEW.` display sits behind the globe and can be occluded by it.
-
-## Map stage and controls
-
-The map is a full-screen stage. Layer controls sit at the left; the inspection area sits at the right. Keep controls and header legible over the globe with the existing parchment surfaces rather than turning them into heavy cards. The layer list exposes earthquakes, active fires, and satellites. Satellite modes and their filters remain inside the expandable satellite section; preserve its disclosure interaction and mode ordering. Layer totals and mode counts appear only as data loads.
-
-When nothing is selected, the inspection area provides the current inspection prompt. A selected earthquake, fire, or orbital object uses a shared inspection shell with feature-owned detail content. Preserve the compact hierarchy, dividers, labels, and feature-specific emphasis. The selected object stays visually identifiable; earthquake selection uses a restrained screen-space leader from the selected marker to the details panel while it is camera-facing.
-
-On narrow screens, shrink and reposition the globe stage so the header, controls, inspection content, and touch interaction remain usable. Preserve the existing responsive breakpoints and panel positions; use the `/data` route as a separate text-forward source page with shared header styling.
-
-## Interaction and motion
-
-The globe supports drag rotation and wheel/pinch zoom without on-screen zoom controls. Keep damping and interaction sensitivity gentle enough for precise inspection. Automatic rotation is slow and stops after a user interaction. The compass/scale and debug affordances remain informational, not competing focal points. Layer toggles, orbital filters, refresh, selection, and close actions must retain their current keyboard and pointer behavior.
-
-Selection is visible only while the selected item exists, its layer or orbital mode is enabled, and it passes the active filter. Clear invalid selections after layer/mode toggles, filter changes, and feed refreshes.
+The reference composition uses a restrained header and left-side layer controls, with inspection content on the right. Keep the satellite modes and filters inside the existing expandable satellite section. On narrow screens, retain usable touch space and the established panel arrangement. Use the current controls and panels as the implementation reference when exact spacing or responsive behavior matters.
 
 ## Globe and geography
 
-Use locally bundled Natural Earth physical layers for land, coastline, lakes, and minor islands, with Admin-0 boundary lines separate from coastlines: 1:50m for the global view and 1:10m for close inspection. Minor islands join the 10m land mesh. Lakes are a separate water-colored surface. Keep ocean, land, lakes, coastlines, and political borders as distinct geometry. Ocean radius is `1.0`; land and borders use `1.0015` and lakes use `1.00155` to avoid z-fighting. Lines do not write depth and render only on the camera-facing hemisphere. Preserve outward-facing land triangles and avoid slope-based polygon offset near the globe limb.
+- Use the bundled Natural Earth geometry for land, coastline, lakes, minor islands, and Admin-0 boundaries. Keep coastlines and political boundaries distinct. Use 1:50m geography globally and 1:10m at close inspection; minor islands join the 10m land mesh.
+- Keep ocean, land, lakes, and lines as separate surfaces. Current radii are ocean `1.0`, land/boundaries `1.0015`, and lakes `1.00155`. Preserve outward-facing land triangles; lines render only on the camera-facing hemisphere and do not write depth.
+- Preserve LOD hysteresis: enter 1:10m below camera distance `2.15`, return to 1:50m above `2.45`. These thresholds apply across the geography layers.
+- Use the bundled GEBCO_2026-derived KTX2 texture for subtle surface shading. Do not turn it into elevation-colored or displaced terrain. Preserve its attribution and safety disclaimer on the `/data` page.
+- Keep the globe custom. Do not introduce map tiles, photorealistic imagery, atmosphere halos, decorative rings, heavy shadows, or ornamental gradients.
 
-LOD enters 1:10m below camera distance `2.15` and returns to 1:50m above `2.45`; this hysteresis prevents rapid switching around the boundary for all geography layers. Keep the globally bundled GEBCO_2026-derived KTX2 relief texture as surface shading rather than elevation-colored or displaced terrain. Preserve source attribution and the navigation/safety disclaimer on the data references page.
+## Interaction and rendering
 
-## Rendering conventions
+- Preserve drag rotation, wheel/pinch zoom, gentle damping, and slow automatic rotation that stops after user interaction. Keep the scale, compass, and debug readouts informational.
+- Keep layer toggles, orbital filters, refresh, selection, disclosure, and close actions usable by their existing keyboard and pointer interactions.
+- A selection stays visible only while its item exists, its layer or mode is enabled, and it passes the current filter. Reconcile after feed refreshes and visibility changes.
+- `frontend/globe/GlobeScene.tsx` composes normalized feature props with geography, relief, batched points, and orbital rendering. Static event points stay batched; satellite propagation stays in its worker-backed renderer.
+- Preserve the satellite worker protocol, catalog ordering, and animation scheduling. Keep feature hooks independent from globe renderers; add a shared renderer abstraction only when implemented features demonstrate the need.
+- Treat performance claims as unverified until comparable workloads and viewports are measured before and after. Renderer diagnostics require `?debug=1`; production builds also require `NEXT_PUBLIC_EARTHVIEW_DEBUG=1` at build time.
 
-`frontend/globe/GlobeScene.tsx` composes typed feature data with geography, relief, batched points, and orbital rendering. Static event points share a batched renderer. Satellite positions are propagated in the dedicated worker and returned through the explicit worker protocol. Keep feature hooks independent from renderer components and do not introduce a renderer registry before a genuinely different layer requires one.
+## Source references
 
-Keep geometry, camera behavior, worker protocol, and animation scheduling stable during organizational refactors. Treat performance improvements as unproven until the same workloads and viewport are measured before and after. `?debug=1` exposes renderer diagnostics in development; production also needs `NEXT_PUBLIC_EARTHVIEW_DEBUG=1` at build time.
-
-## References
-
-- Canonical visual values: `frontend/styles/design-tokens.css`
-- Shared visual rules for contributors: `frontend/AGENTS.md`
-- Natural Earth usage and source attribution: `README.md` and the `/data` page
+For Natural Earth and GEBCO attribution, asset paths, and source limitations, use the [README data-source table](README.md#data-sources) and the `/data` page. This guide records the visual and geometry constraints; the source descriptions belong in those references.

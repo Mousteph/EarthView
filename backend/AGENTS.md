@@ -1,30 +1,27 @@
-# Backend Guidance
+# Backend agent guide
 
-## Architecture
+Use this guide for FastAPI routes, provider clients, normalized models, and backend caching. The root [AGENTS.md](../AGENTS.md) defines repository-wide boundaries; [README.md](../README.md) has setup commands and data-source details.
 
-- Keep FastAPI routes in `app/main.py` thin: call a long-lived data-layer instance and map expected configuration or upstream failures to HTTP responses.
-- Put each data source in its own package under `app/data_layer/`. Keep normalized Pydantic models in `models.py` and fetching/coordination in a clearly named `*_data_layer.py` module.
-- Keep external payload formats inside the data layer. Normalize records into internal models before returning them from a route.
-- Split more complex sources into focused modules only when each has a clear job, as with satellites' `source.py`, `normalizer.py`, and `caches.py`. Keep the data-layer class as their coordinator.
-- Construct each active data layer once at application startup. Read required configuration and derive provider URLs during initialization so configuration errors surface at startup.
+## Ownership
 
-## Coding Patterns
+- `app/main.py` declares routes, calls long-lived data-layer instances, and maps expected failures to HTTP responses.
+- `app/data_layer/<source>/` owns each provider integration. Keep external payload parsing and normalization within that source package.
+- `models.py` defines normalized Pydantic response models. Return those models from routes rather than provider records.
+- A source data-layer class coordinates its focused clients, normalizers, and caches. Keep mutable cache, lock, and retry state on the owning instance.
+- `app/data_layer/satellites.py` is a legacy module; the active implementation is `app/data_layer/satellites/`.
 
-- Prefer small, explicit classes and methods with names that describe the operation. Use names such as `SatelliteDataLayer`, `CelesTrakClient`, and `normalize_omm`.
-- Keep mutable cache, lock, and retry state on the long-lived instance that owns it; avoid adding module-level mutable state or compatibility wrappers around old functions.
-- Keep abstractions proportional to the source. Do not introduce a shared framework or extra class for a single simple operation.
-- Use Pydantic models for normalized data and explicit `typing` collection annotations such as `List`, `Dict`, `Set`, and `Tuple`.
-- Keep configuration, URL construction, provider access, normalization, and route error mapping in their respective layers.
+## Add or change a source
 
-## Adding a Data Layer
+1. **Inspect the route, data layer, and tests** for the nearest existing source. Confirm the current API shape and failure behavior. Completion: the target contract and owning package are clear.
+2. **Implement at the source boundary.** Keep configuration, URL construction, provider access, normalization, and route error mapping in their respective layers. Reject malformed feed structure; skip invalid individual records only when the source contract allows it. Completion: routes receive normalized models and provider details remain encapsulated.
+3. **Wire explicitly.** Export the source model and data-layer class from its package, construct one layer instance for the app, and add a thin route with deliberate status and cache headers. Completion: the endpoint follows neighboring route conventions and preserves unrelated response contracts.
+4. **Verify behavior.** Update focused `unittest` coverage when behavior or an endpoint contract changes, then run the backend suite when requested. Completion: relevant tests pass, or unrun checks and their reason are stated.
 
-1. Add a package under `app/data_layer/<source>/` with `models.py` and a named data-layer module.
-2. Normalize the provider response into the package's domain model before returning it; reject invalid feed structure and skip invalid individual records where appropriate.
-3. Export the model and data-layer class from the package `__init__.py`, then construct one layer instance in `app/main.py` and add a thin route with explicit error mapping.
-4. Update the existing `unittest` coverage for normalization, provider failures, and the endpoint contract when behavior changes. Run tests or add new test cases when the task requests it.
+## Data and configuration rules
 
-## Project Constraints
-
-- Keep data ingestion independent from visualization code and external API formats.
-- The `satellites.py` module is retained temporarily; use the `app.data_layer.satellites` package as the active implementation.
-- Put globe appearance, interaction, and Natural Earth source-policy guidance in the root `DESIGN.md`, not here.
+- Construct each active layer once at application startup. Read required configuration and derive provider URLs during initialization so configuration errors are visible at startup.
+- Use explicit typed collections and small methods with names that describe the operation. Add abstractions only when more than one real operation needs them.
+- Keep ingestion independent from frontend visualization and avoid module-level mutable runtime state.
+- Preserve endpoint paths and normalized response shapes unless the task explicitly scopes a compatible API change.
+- Keep secrets in the ignored local `config.yaml`; use `config.example.yaml` as the template. Do not log or expose keys.
+- Source freshness and cache policies are documented in the README; inspect the implementation before changing or restating their values.

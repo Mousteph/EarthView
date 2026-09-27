@@ -1,35 +1,33 @@
-# Frontend guide
+# Frontend agent guide
 
-## Structure and ownership
+Use this guide for Next.js routes, React features, styles, and Three.js rendering. The root [AGENTS.md](../AGENTS.md) defines repository-wide contracts. Read [../DESIGN.md](../DESIGN.md) before changing visual treatment, geography, camera behavior, or globe interaction.
 
-- `app/` contains the map route (`page.tsx`), the data-source route (`data/page.tsx`), and the CSS entry point (`globals.css`). Route components should delegate map behavior to `features/map/MapView.tsx`.
-- `features/earthquakes/`, `features/fires/`, and `features/orbital/` own their normalized models, response validation, feed hooks, feature filters/colors, and detail content. Earthquakes and fires share only the array-feed mechanics in `shared/data/useArrayFeed.ts`; orbital feeds keep their distinct mode, refresh, and cache behavior.
-- `features/map/` composes features and owns enabled layer state, orbital filters, and selection. `selection.ts` is the single selection validity rule.
-- `globe/` owns rendering: `GlobeScene.tsx` composes the scene; `geography/` owns geometry preparation and LOD; `relief/` owns Earth shading; `points/PointLayer.tsx` batches static points; `orbital/` owns the specialized satellite renderer, propagation worker, and message protocol; `debug/` owns renderer diagnostics.
-- `shared/` contains only cross-feature utilities and UI primitives. `globe/geo.ts` converts geographic coordinates into Three.js vectors; `shared/designTokens.ts` bridges CSS colors to Three.js.
-- `styles/design-tokens.css` is the source of truth for fixed colors and shared visual values. `layout.css`, `controls.css`, and `data-page.css` consume those tokens. `globals.css` imports them in cascade order.
+## Ownership
 
-## Data and rendering boundaries
+- `app/` owns the map route, `/data` source page, and global CSS entry. Keep route composition focused; map behavior belongs in `features/map/MapView.tsx`.
+- `features/earthquakes/`, `features/fires/`, and `features/orbital/` own normalized models, API response validation, feed hooks, filters, formatting, and detail content.
+- `features/map/` composes features and owns enabled-layer state, orbital filters, and selection. `selection.ts` defines selection validity.
+- `globe/` owns the scene and rendering: geography and LOD, relief, batched event points, satellite propagation/rendering, and diagnostics.
+- `shared/` is for cross-feature utilities and UI primitives. Keep feature hooks independent from globe components.
+- `styles/design-tokens.css` is the source for fixed colors and shared visual values. CSS uses semantic tokens; Three.js uses `shared/designTokens.ts`, resolving CSS values after mount.
 
-The flow is provider response → backend normalization → frontend feature validation → typed renderer props. Do not pass external-provider payloads directly to globe components, or make feature feed hooks depend on globe code. Keep frontend API paths and response shapes aligned with the FastAPI routes unless an API change is explicitly in scope.
+## Change workflow
 
-Static earthquake and fire points use the shared batched point renderer; do not add one React component or Three.js mesh per entity. Satellite propagation remains specialized and worker-backed. Preserve the worker protocol, catalog ordering, and render scheduling unless a measured change requires a scoped update.
+1. **Trace the feed.** Inspect the frontend model and hook plus the matching backend route/model before changing a feed. Completion: the response shape, validation point, and feature owner are identified.
+2. **Keep feature behavior local.** Earthquakes and fires may share `shared/data/useArrayFeed.ts` when the endpoint follows that loader's lifecycle. Orbital modes retain their own refresh, cache, validation, and filter behavior. Completion: shared code is used only for a matching lifecycle.
+3. **Compose deliberately.** Add feature state and selection rules in `features/map/`, then pass normalized typed data through `GlobeScene.tsx` to the relevant renderer. Batch static points; keep satellite computation in its worker-backed path. Completion: renderers receive typed feature data and feature hooks import no globe code.
+4. **Preserve user behavior.** Reconcile selection after feed refreshes, layer or mode toggles, and filter changes. Keep loading, error, stale-data, refresh, disclosure, keyboard, pointer, and narrow-screen behavior consistent with the existing feature. Completion: each affected state transition has been inspected in code or verified in the browser as the task requires.
+5. **Use current framework guidance.** Before changing Next.js APIs or conventions, read the relevant installed guide under `node_modules/next/dist/docs/`. Completion: the implementation follows the installed Next.js version's guidance.
+6. **Verify the scope.** Run applicable frontend commands from `frontend/`; start the backend separately when feed integration requires it. Use `?debug=1` for renderer diagnostics; production diagnostics also require `NEXT_PUBLIC_EARTHVIEW_DEBUG=1` at build time. Completion: report exact checks and distinguish build/type checks from browser or GPU verification.
 
-Selection remains valid only while its item exists, its layer or orbital mode is enabled, and it passes its active filter. Reconcile selection after visibility changes, filter changes, and feed refreshes. Preserve the satellite disclosure behavior in the layer controls.
+## Contracts to preserve
 
-## Visual rules
-
-Consult `../DESIGN.md` before changing globe appearance, interaction, layout, or responsive behavior. Preserve the editorial globe, page chrome, panels, typography, colors, animation, and narrow-screen controls. Put fixed color values in `styles/design-tokens.css`; use semantic token names in stylesheets and the typed bridge for Three.js. Resolve CSS color values on the client after mount, never while rendering on the server. Deterministic generated colors remain appropriate for unknown orbital categories.
-
-## Adding or changing a feature
-
-1. Inspect the nearest existing feature and its backend response before choosing files or changing contracts.
-2. Define or update the feature-owned normalized model and validation.
-3. Add the feed hook and feature-specific filters/formatting beside that model. Reuse `shared/data/useArrayFeed.ts` only when the endpoint follows the earthquake/fire array-feed lifecycle.
-4. Compose the feature explicitly in `features/map/`; keep map state/selection there and keep feature hooks independent from Three.js.
-5. Add typed props to the scene and implement rendering under the relevant `globe/` responsibility. Batch large point collections and use a worker only when the computation warrants it.
-6. Add or update the controls and feature detail content using the shared UI primitives. Add any fixed color as a semantic design token.
-7. Preserve responsive layout, loading/error/stale states, refresh semantics, and selection validity. Keep API changes and performance changes separate from a structural move where possible.
+- Keep API paths and response shapes aligned with FastAPI unless an API change is explicitly requested.
+- `globe/geo.ts` owns geographic-to-Three.js coordinate conversion.
+- Selection remains open only while the item exists, its layer/mode is enabled, and it passes the active filter.
+- Preserve the satellite worker message protocol, catalog ordering, and animation scheduling during implementation changes.
+- Add fixed visual values through semantic design tokens; unknown orbital categories may use deterministic generated colors.
+- Avoid a universal layer registry. Add shared abstractions only when multiple implemented features require the same behavior.
 
 ## Commands
 
@@ -44,7 +42,7 @@ npm run build
 node --test tests/*.test.mjs
 ```
 
-Start the API separately from `backend/`; Next rewrites `/api/*` to `http://127.0.0.1:8000` by default. Set `EARTHVIEW_API_ORIGIN` before starting Next.js to use a different API origin. Use `?debug=1` for development renderer diagnostics.
+The frontend rewrites `/api/*` to `http://127.0.0.1:8000` by default. Set `EARTHVIEW_API_ORIGIN` before starting Next.js to use another API origin.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
