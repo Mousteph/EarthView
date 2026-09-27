@@ -5,9 +5,16 @@ import {
   Uint32BufferAttribute,
   Vector3,
 } from "three";
-import type { PreparedGeography } from "./geographyPreparation";
+import type { GeographySources, PreparedGeography } from "./geographyPreparation";
 
 export type GeographicLod = "50m" | "10m";
+
+type GeographyAssetPaths = {
+  land: string[];
+  lakes: string;
+  coastlines: string;
+  borders: string;
+};
 
 type WorkerResult =
   | { ok: true; prepared: PreparedGeography }
@@ -27,14 +34,27 @@ export const GEOGRAPHY_LOD_THRESHOLDS = {
   exitCloseDistance: 2.45,
 } as const;
 
-const countriesPaths: Record<GeographicLod, string> = {
-  "50m": "/data/natural-earth/ne_50m_admin_0_countries.geojson",
-  "10m": "/data/natural-earth/ne_10m_admin_0_countries.geojson",
+const geographyPaths: Record<GeographicLod, GeographyAssetPaths> = {
+  "50m": {
+    land: ["/data/natural-earth/ne_50m_land.geojson"],
+    lakes: "/data/natural-earth/ne_50m_lakes.geojson",
+    coastlines: "/data/natural-earth/ne_50m_coastline.geojson",
+    borders: "/data/natural-earth/ne_50m_admin_0_boundary_lines_land.geojson",
+  },
+  "10m": {
+    land: [
+      "/data/natural-earth/ne_10m_land.geojson",
+      "/data/natural-earth/ne_10m_minor_islands.geojson",
+    ],
+    lakes: "/data/natural-earth/ne_10m_lakes.geojson",
+    coastlines: "/data/natural-earth/ne_10m_coastline.geojson",
+    borders: "/data/natural-earth/ne_10m_admin_0_boundary_lines_land.geojson",
+  },
 };
 const preparedGeography = new Map<GeographicLod, Promise<PreparedGeography>>();
 const geographyBounds = new Sphere(new Vector3(), 1.0015);
 
-function prepareInWorker(path: string) {
+function prepareInWorker(paths: GeographyAssetPaths) {
   return new Promise<PreparedGeography>((resolve, reject) => {
     const worker = new Worker(new URL("./geography.worker.ts", import.meta.url), {
       type: "module",
@@ -50,7 +70,7 @@ function prepareInWorker(path: string) {
       cleanup();
       reject(event.error ?? new Error(event.message));
     }, { once: true });
-    worker.postMessage(path);
+    worker.postMessage(paths);
   });
 }
 
@@ -58,7 +78,7 @@ export function loadPreparedGeography(lod: GeographicLod) {
   const cached = preparedGeography.get(lod);
   if (cached) return cached;
 
-  const request = prepareInWorker(countriesPaths[lod])
+  const request = prepareInWorker(geographyPaths[lod])
     .then((prepared) => {
       if (process.env.NODE_ENV !== "production") {
         window.__EARTHVIEW_GEOGRAPHY__ = {
@@ -82,26 +102,40 @@ export function loadPreparedGeography(lod: GeographicLod) {
 }
 
 export function createGeographyGeometries(prepared: PreparedGeography) {
-  const land = new BufferGeometry();
-  land.setAttribute("position", new Float32BufferAttribute(prepared.landPositions, 3));
-  const normals = new Float32Array(prepared.landPositions.length);
-  for (let index = 0; index < normals.length; index += 3) {
-    const x = prepared.landPositions[index];
-    const y = prepared.landPositions[index + 1];
-    const z = prepared.landPositions[index + 2];
-    const length = Math.hypot(x, y, z);
-    normals[index] = x / length;
-    normals[index + 1] = y / length;
-    normals[index + 2] = z / length;
-  }
-  land.setAttribute("normal", new Float32BufferAttribute(normals, 3));
-  land.setIndex(new Uint32BufferAttribute(prepared.landIndices, 1));
-  land.boundingSphere = geographyBounds.clone();
+  const createSurface = (positions: Float32Array, indices: Uint32Array) => {
+    const geometry = new BufferGeometry();
+    geometry.setAttribute("position", new Float32BufferAttribute(positions, 3));
+    const normals = new Float32Array(positions.length);
+    for (let index = 0; index < normals.length; index += 3) {
+      const x = positions[index];
+      const y = positions[index + 1];
+      const z = positions[index + 2];
+      const length = Math.hypot(x, y, z);
+      normals[index] = x / length;
+      normals[index + 1] = y / length;
+      normals[index + 2] = z / length;
+    }
+    geometry.setAttribute("normal", new Float32BufferAttribute(normals, 3));
+    geometry.setIndex(new Uint32BufferAttribute(indices, 1));
+    geometry.boundingSphere = geographyBounds.clone();
+    return geometry;
+  };
 
-  const borders = new BufferGeometry();
-  borders.setAttribute("position", new Float32BufferAttribute(prepared.borderPositions, 3));
-  borders.setIndex(new Uint32BufferAttribute(prepared.borderIndices, 1));
-  borders.boundingSphere = geographyBounds.clone();
+  const land = createSurface(prepared.landPositions, prepared.landIndices);
+  const lakes = createSurface(prepared.lakePositions, prepared.lakeIndices);
 
-  return { land, borders };
+  const createLines = (positions: Float32Array, indices: Uint32Array) => {
+    const geometry = new BufferGeometry();
+    geometry.setAttribute("position", new Float32BufferAttribute(positions, 3));
+    geometry.setIndex(new Uint32BufferAttribute(indices, 1));
+    geometry.boundingSphere = geographyBounds.clone();
+    return geometry;
+  };
+
+  return {
+    land,
+    lakes,
+    coastlines: createLines(prepared.coastlinePositions, prepared.coastlineIndices),
+    borders: createLines(prepared.borderPositions, prepared.borderIndices),
+  };
 }

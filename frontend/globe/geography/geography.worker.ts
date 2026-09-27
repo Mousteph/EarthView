@@ -1,17 +1,34 @@
 import {
   prepareGeography,
   type FeatureCollection,
+  type GeographySources,
 } from "./geographyPreparation";
 
-self.addEventListener("message", async (event: MessageEvent<string>) => {
-  try {
-    const response = await fetch(event.data);
-    if (!response.ok) throw new Error(`Unable to load ${event.data}`);
+type GeographyAssetPaths = {
+  land: string[];
+  lakes: string;
+  coastlines: string;
+  borders: string;
+};
 
-    const prepared = prepareGeography((await response.json()) as FeatureCollection);
+self.addEventListener("message", async (event: MessageEvent<GeographyAssetPaths>) => {
+  try {
+    const paths = event.data;
+    const [land, lakes, coastlines, borders] = await Promise.all([
+      Promise.all(paths.land.map(loadCollection)),
+      loadCollection(paths.lakes),
+      loadCollection(paths.coastlines),
+      loadCollection(paths.borders),
+    ]);
+
+    const prepared = prepareGeography({ land, lakes, coastlines, borders });
     const transfer = [
       prepared.landPositions.buffer,
       prepared.landIndices.buffer,
+      prepared.lakePositions.buffer,
+      prepared.lakeIndices.buffer,
+      prepared.coastlinePositions.buffer,
+      prepared.coastlineIndices.buffer,
       prepared.borderPositions.buffer,
       prepared.borderIndices.buffer,
     ];
@@ -22,3 +39,9 @@ self.addEventListener("message", async (event: MessageEvent<string>) => {
     self.postMessage({ ok: false, message });
   }
 });
+
+async function loadCollection(path: string): Promise<FeatureCollection> {
+  const response = await fetch(path);
+  if (!response.ok) throw new Error(`Unable to load ${path}`);
+  return response.json() as Promise<FeatureCollection>;
+}

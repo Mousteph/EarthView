@@ -3,7 +3,7 @@
 import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useLoader } from "@react-three/fiber";
 import { memo, Suspense, useCallback, useEffect, useState } from "react";
-import { TextureLoader } from "three";
+import { KTX2Loader } from "three-stdlib";
 import { useThree } from "@react-three/fiber";
 import type { Earthquake } from "@/features/earthquakes/model";
 import type { Fire } from "@/features/fires/model";
@@ -56,7 +56,12 @@ function RenderScheduler({ active }: { active: boolean }) {
 }
 
 function ReliefSurface({ onActiveLodChange }: { readonly onActiveLodChange: (lod: GeographicLod) => void }) {
-  const texture = useLoader(TextureLoader, RELIEF.texturePath);
+  const renderer = useThree((state) => state.gl);
+  const texture = useLoader(
+    KTX2Loader,
+    RELIEF.texturePath,
+    (loader) => loader.setTranscoderPath("/basis/").detectSupport(renderer),
+  );
 
   return (
     <>
