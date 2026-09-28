@@ -12,6 +12,8 @@
 
 .layer-toggle-satellites { --layer-color: var(--color-satellite); }
 
+.layer-toggle-pipelines { --layer-color: var(--color-pipeline-gas); }
+
 .layer-toggle-circle { display: grid; flex: none; place-items: center; width: 25px; height: 25px; border: 1px solid var(--layer-color); border-radius: 50%; background: transparent; }
 
 .layer-toggle-circle::after { width: 15px; height: 15px; border-radius: 50%; background: transparent; content: ""; }
@@ -45,6 +47,34 @@
 .orbital-disclosure:hover, .orbital-filter-heading:hover { color: var(--color-ink); }
 
 .orbital-options { max-height: 330px; margin: 0 0 14px 48px; overflow: auto; }
+
+.pipeline-options { display: grid; margin: 0 0 12px 48px; }
+
+.pipeline-fuel { border-top: 1px solid var(--color-orbital-border); }
+
+.pipeline-fuel-row { display: flex; min-width: 0; align-items: center; gap: 7px; }
+
+.pipeline-choice { display: flex; min-width: 0; min-height: 34px; flex: 1; align-items: center; gap: 8px; border: 0; padding: 0; background: transparent; color: var(--color-orbital-label); font: inherit; font-size: 11px; line-height: 1.25; text-align: left; cursor: pointer; }
+
+.pipeline-choice[aria-pressed="true"] { color: var(--color-orbital-label-active); }
+
+.pipeline-marker { width: 9px; height: 9px; flex: none; border-radius: 50%; background: transparent; box-shadow: inset 0 0 0 1.5px var(--pipeline-color); }
+
+.pipeline-choice[aria-pressed="true"] .pipeline-marker { background: var(--pipeline-color); }
+
+.pipeline-choice-gas { --pipeline-color: var(--color-pipeline-gas); }
+
+.pipeline-choice-oil { --pipeline-color: var(--color-pipeline-oil); }
+
+.pipeline-status-filter { padding: 0 0 2px 18px; }
+
+.pipeline-status-filter .orbital-filter-options { padding-bottom: 7px; }
+
+.pipeline-status-option { --orbital-color: var(--pipeline-color); }
+
+.pipeline-fuel:focus-within .orbital-disclosure:focus-visible { outline: 2px solid var(--color-ink); outline-offset: 2px; }
+
+.pipeline-count { color: var(--color-muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 .orbital-category { --orbital-color: var(--color-satellite); border-top: 1px solid var(--color-orbital-border); }
 
@@ -132,6 +162,16 @@
 
 .event-primary > .fire-primary-label { color: var(--color-fire); }
 
+.pipeline-primary > div:first-child { color: var(--color-inspection-heading); font-size: clamp(28px, 2.2vw, 36px) !important; letter-spacing: -0.035em !important; line-height: 1.15 !important; white-space: normal !important; }
+.pipeline-details-gas .pipeline-primary > div:first-child { color: var(--color-pipeline-gas); }
+.pipeline-details-oil .pipeline-primary > div:first-child { color: var(--color-pipeline-oil); }
+
+.pipeline-primary > p { color: var(--color-muted); font-size: 13px; }
+
+.pipeline-type-pill { display: inline-flex; min-height: 25px; align-items: center; border: 1px solid var(--color-pill-border); border-radius: 999px; padding: 4px 9px; background: var(--color-panel-soft); color: var(--color-pipeline-gas); font-size: 11px; font-weight: 550; line-height: 1.2; }
+
+.pipeline-type-oil, .pipeline-type-ngl { color: var(--color-pipeline-oil); }
+
 .event-primary-caption { display: block; margin-bottom: 5px; font-size: 11px; font-weight: 700; letter-spacing: .17em; line-height: 1.2; text-transform: uppercase; }
 
 .event-primary > div:not(.orbital-primary-badges) > span:last-child { display: block; overflow-wrap: anywhere; }
@@ -206,6 +246,7 @@
   .layer-toggle-circle::after { width: 12px; height: 12px; }
   .layer-refresh svg { width: 18px; height: 18px; }
   .orbital-options { max-height: 205px; margin-left: 34px; }
+  .pipeline-options { margin-left: 34px; }
   .orbital-filter-groups { max-height: 170px; }
   .inspection-prompt, .event-details { top: auto; right: 20px; bottom: 175px; width: min(255px, calc(100vw - 40px)); }
   .inspection-prompt { padding-top: 15px; }
@@ -215,6 +256,7 @@
   .event-close { top: 3px; right: 3px; }
   .event-details-heading { margin-bottom: 10px; font-size: 10px; }
   .event-primary > div:not(.orbital-primary-badges), .event-primary > .fire-primary-label { font-size: 28px; }
+  .pipeline-primary > div:first-child { font-size: 24px !important; }
   .orbital-primary-badges { gap: 5px; margin-top: 7px; }
   .orbital-info-pill, .orbital-status-pill { min-height: 22px; padding: 3px 7px; font-size: 9px; }
   .event-details dl { gap: 7px; margin-top: 12px; }
