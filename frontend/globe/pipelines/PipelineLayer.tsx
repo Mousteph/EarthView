@@ -3,10 +3,6 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { useThree } from "@react-three/fiber";
 import {
-  BufferAttribute,
-  BufferGeometry,
-  LineBasicMaterial,
-  LineSegments,
   Vector3,
   type Intersection,
   type Raycaster,
@@ -21,7 +17,8 @@ import { ScreenSpatialIndex } from "@/globe/interaction/ScreenSpatialIndex";
 import { routeRangeForSegment, type PipelineRouteRange } from "./picking";
 
 type PipelineGeometry = {
-  readonly geometry: BufferGeometry;
+  readonly geometry: LineSegmentsGeometry;
+  readonly positions: Float32Array;
   readonly routes: readonly PipelineRouteRange[];
 };
 
@@ -244,17 +241,17 @@ function createPipelineGeometry(pipelines: readonly Pipeline[]): PipelineGeometr
     segmentOffset += item.segmentCount;
   }
 
-  const geometry = new BufferGeometry();
-  geometry.setAttribute("position", new BufferAttribute(positions, 3));
+  const geometry = new LineSegmentsGeometry();
+  geometry.setPositions(positions);
   geometry.computeBoundingSphere();
-  return { geometry, routes };
+  return { geometry, positions, routes };
 }
 
 function createSelectedGeometry(batch: PipelineGeometry | null, selectedId: string | null) {
   if (!batch || !selectedId) return null;
   const range = batch.routes.find((route) => route.id === selectedId);
   if (!range) return null;
-  const positions = batch.geometry.getAttribute("position").array as Float32Array;
+  const positions = batch.positions;
   const start = range.startSegment * 6;
   const end = start + range.segmentCount * 6;
   const geometry = new LineSegmentsGeometry();
@@ -274,7 +271,7 @@ function updateHoverGeometry(geometry: LineSegmentsGeometry, batch: PipelineGeom
   if (!instanceBuffer) return;
   const target = instanceBuffer.array as Float32Array;
   if (batch && route) {
-    const source = batch.geometry.getAttribute("position").array as Float32Array;
+    const source = batch.positions;
     const start = route.startSegment * 6;
     const end = start + route.segmentCount * 6;
     target.set(source.subarray(start, end), 0);
@@ -286,7 +283,7 @@ function updateHoverGeometry(geometry: LineSegmentsGeometry, batch: PipelineGeom
 }
 
 function createPipelinePickingCache(batch: PipelineGeometry) {
-  const segmentCount = (batch.geometry.getAttribute("position").count / 2) | 0;
+  const segmentCount = batch.positions.length / 6;
   return {
     index: new ScreenSpatialIndex(),
     startX: new Float32Array(segmentCount),
@@ -318,8 +315,10 @@ export function PipelineLayer({ pipelines, visible, selectedId, hoveredId, onSel
     oilBatch.routes.reduce((max, route) => Math.max(max, route.segmentCount), 0),
   );
   const hoverGeometry = useMemo(() => createHoverGeometry(maxRouteSegments), [maxRouteSegments]);
-  const gasMaterial = useMemo(() => new LineBasicMaterial({ transparent: true, depthTest: true, depthWrite: false, opacity: 0.76 }), []);
-  const oilMaterial = useMemo(() => new LineBasicMaterial({ transparent: true, depthTest: true, depthWrite: false, opacity: 0.76 }), []);
+  const gasMaterial = useMemo(() => new LineMaterial({ linewidth: 1.6, transparent: true, depthTest: true, depthWrite: false, opacity: 0.76 }), []);
+  const oilMaterial = useMemo(() => new LineMaterial({ linewidth: 1.6, transparent: true, depthTest: true, depthWrite: false, opacity: 0.76 }), []);
+  const gasLine = useMemo(() => new LineSegments2(gasBatch.geometry, gasMaterial), [gasBatch.geometry, gasMaterial]);
+  const oilLine = useMemo(() => new LineSegments2(oilBatch.geometry, oilMaterial), [oilBatch.geometry, oilMaterial]);
   const selectedMaterial = useMemo(() => new LineMaterial({
     linewidth: 2.8,
     transparent: true,
@@ -347,7 +346,7 @@ export function PipelineLayer({ pipelines, visible, selectedId, hoveredId, onSel
   const projectedEnd = useMemo(() => new Vector3(), []);
   const cameraPosition = useMemo(() => new Vector3(), []);
   const raycastFor = useCallback((batch: PipelineGeometry, cache: ReturnType<typeof createPipelinePickingCache>) => function raycastPipelineLines(
-    this: LineSegments,
+    this: LineSegments2,
     _raycaster: Raycaster,
     intersections: Intersection[],
   ) {
@@ -360,9 +359,9 @@ export function PipelineLayer({ pipelines, visible, selectedId, hoveredId, onSel
       cameraProjection: camera.projectionMatrix.elements,
       objectWorld: this.matrixWorld.elements,
       cameraDistance: camera.position.length(),
-      source: batch.geometry,
+      source: batch.positions,
     };
-    const positions = batch.geometry.getAttribute("position").array as Float32Array;
+    const positions = batch.positions;
     if (cache.index.isStale(snapshot)) {
       cache.index.reset(snapshot);
       const segmentCount = positions.length / 6;
@@ -488,8 +487,8 @@ export function PipelineLayer({ pipelines, visible, selectedId, hoveredId, onSel
   };
 
   return <group>
-    {gasBatch.routes.length > 0 ? <lineSegments geometry={gasBatch.geometry} material={gasMaterial} raycast={gasRaycast} onClick={handleClick(gasBatch)} onPointerMove={handleHoverMove(gasBatch)} onPointerOut={handleHoverOut(gasBatch)} renderOrder={2} /> : null}
-    {oilBatch.routes.length > 0 ? <lineSegments geometry={oilBatch.geometry} material={oilMaterial} raycast={oilRaycast} onClick={handleClick(oilBatch)} onPointerMove={handleHoverMove(oilBatch)} onPointerOut={handleHoverOut(oilBatch)} renderOrder={2} /> : null}
+    {gasBatch.routes.length > 0 ? <primitive object={gasLine} raycast={gasRaycast} onClick={handleClick(gasBatch)} onPointerMove={handleHoverMove(gasBatch)} onPointerOut={handleHoverOut(gasBatch)} renderOrder={2} /> : null}
+    {oilBatch.routes.length > 0 ? <primitive object={oilLine} raycast={oilRaycast} onClick={handleClick(oilBatch)} onPointerMove={handleHoverMove(oilBatch)} onPointerOut={handleHoverOut(oilBatch)} renderOrder={2} /> : null}
     {hoveredPipeline && hoveredId !== selectedId ? <primitive object={hoverLine} raycast={() => null} frustumCulled={false} renderOrder={2.5} /> : null}
     {selectedLine ? <primitive object={selectedLine} raycast={() => null} renderOrder={3} /> : null}
   </group>;

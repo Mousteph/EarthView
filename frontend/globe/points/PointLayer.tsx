@@ -27,6 +27,7 @@ type PointLayerProps<T extends GeoEvent> = {
   readonly layerType: "earthquakes" | "fires";
   readonly hoveredId: string | null;
   readonly sizeFor: (entity: T) => number;
+  readonly opacityFor?: (entity: T) => number;
   readonly onSelect: (id: string) => void;
   readonly onHover: (key: HoverKey, clientX: number, clientY: number, distance: number, event: PointerEvent) => void;
   readonly onHoverEnd: (key: HoverKey) => void;
@@ -46,7 +47,8 @@ const pointPickRadiusPixels = 6;
 function createPointGeometry(points: readonly Vector3[], sizes?: readonly number[]) {
   const geometry = new BufferGeometry();
   geometry.setFromPoints([...points]);
-  if (sizes) geometry.setAttribute("markerSize", new Float32BufferAttribute(sizes, 1));
+  geometry.setAttribute("markerSize", new Float32BufferAttribute(sizes ?? points.map(() => 1), 1));
+  geometry.setAttribute("markerOpacity", new Float32BufferAttribute(points.map(() => 1), 1));
   geometry.computeBoundingSphere();
   return geometry;
 }
@@ -114,6 +116,7 @@ export function PointLayer<T extends GeoEvent>({
   layerType,
   hoveredId,
   sizeFor,
+  opacityFor,
   onSelect,
   onHover,
   onHoverEnd,
@@ -129,7 +132,15 @@ export function PointLayer<T extends GeoEvent>({
     () => entities.map((entity) => Math.max(sizeFor(entity), ringed ? 1.2 : 1)),
     [entities, ringed, sizeFor],
   );
-  const geometry = useMemo(() => createPointGeometry(positions, sizes), [positions, sizes]);
+  const opacities = useMemo(
+    () => opacityFor ? entities.map((entity) => Math.min(1, Math.max(0, opacityFor(entity)))) : null,
+    [entities, opacityFor],
+  );
+  const geometry = useMemo(() => {
+    const pointGeometry = createPointGeometry(positions, sizes);
+    if (opacities) pointGeometry.setAttribute("markerOpacity", new Float32BufferAttribute(opacities, 1));
+    return pointGeometry;
+  }, [opacities, positions, sizes]);
   const picking = useMemo(() => ({
     index: new ScreenSpatialIndex(),
     x: new Float32Array(entities.length),
@@ -214,11 +225,12 @@ export function PointLayer<T extends GeoEvent>({
         size: ringed ? 6.8 : 4.2,
         sizeAttenuation: false,
         transparent: true,
-        opacity: 0.9,
+        opacity: opacityFor ? 1 : 0.9,
       });
       material.onBeforeCompile = (shader) => {
         shader.vertexShader = shader.vertexShader
-          .replace("#include <common>", "#include <common>\nattribute float markerSize;")
+          .replace("#include <common>", "#include <common>\nattribute float markerSize;\nattribute float markerOpacity;\nvarying float vMarkerOpacity;")
+          .replace("#include <begin_vertex>", "#include <begin_vertex>\nvMarkerOpacity = markerOpacity;")
           .replace("gl_PointSize = size;", "gl_PointSize = markerSize * size;");
         const markerShape = ringed
           ? `
@@ -230,25 +242,27 @@ export function PointLayer<T extends GeoEvent>({
           : "if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard;";
         shader.fragmentShader = shader.fragmentShader.replace(
           "#include <clipping_planes_fragment>",
-          `#include <clipping_planes_fragment>\n${markerShape}`,
+          `#include <clipping_planes_fragment>\ndiffuseColor.a *= vMarkerOpacity;\n${markerShape}`,
         );
+        shader.fragmentShader = shader.fragmentShader.replace("#include <common>", "#include <common>\nvarying float vMarkerOpacity;");
       };
-      material.customProgramCacheKey = () => `earthview-data-points-v3-${ringed}`;
+      material.customProgramCacheKey = () => `earthview-data-points-v4-${ringed}`;
       return material;
     },
-    [ringed],
+    [opacityFor, ringed],
   );
   const selectedMaterial = useMemo(
     () => {
       const material = new PointsMaterial({
         depthWrite: false,
-        size: ringed ? 9.5 : 5.5,
+        size: ringed ? 9.5 : 6.5,
         sizeAttenuation: false,
         transparent: true,
       });
       material.onBeforeCompile = (shader) => {
         shader.vertexShader = shader.vertexShader
-          .replace("#include <common>", "#include <common>\nattribute float markerSize;")
+          .replace("#include <common>", "#include <common>\nattribute float markerSize;\nattribute float markerOpacity;\nvarying float vMarkerOpacity;")
+          .replace("#include <begin_vertex>", "#include <begin_vertex>\nvMarkerOpacity = markerOpacity;")
           .replace("gl_PointSize = size;", "gl_PointSize = markerSize * size;");
         const markerShape = ringed
           ? `
@@ -260,10 +274,11 @@ export function PointLayer<T extends GeoEvent>({
           : "if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard;";
         shader.fragmentShader = shader.fragmentShader.replace(
           "#include <clipping_planes_fragment>",
-          `#include <clipping_planes_fragment>\n${markerShape}`,
+          `#include <clipping_planes_fragment>\ndiffuseColor.a *= vMarkerOpacity;\n${markerShape}`,
         );
+        shader.fragmentShader = shader.fragmentShader.replace("#include <common>", "#include <common>\nvarying float vMarkerOpacity;");
       };
-      material.customProgramCacheKey = () => `earthview-selected-data-points-v3-${ringed}`;
+      material.customProgramCacheKey = () => `earthview-selected-data-points-v4-${ringed}`;
       return material;
     },
     [ringed],
@@ -278,14 +293,16 @@ export function PointLayer<T extends GeoEvent>({
     });
     material.onBeforeCompile = (shader) => {
       shader.vertexShader = shader.vertexShader
-        .replace("#include <common>", "#include <common>\nattribute float markerSize;")
+        .replace("#include <common>", "#include <common>\nattribute float markerSize;\nattribute float markerOpacity;\nvarying float vMarkerOpacity;")
+        .replace("#include <begin_vertex>", "#include <begin_vertex>\nvMarkerOpacity = markerOpacity;")
         .replace("gl_PointSize = size;", "gl_PointSize = markerSize * size;");
       const markerShape = ringed
         ? `float radius = length(gl_PointCoord - vec2(0.5)) * 2.0; if (radius > 1.0) discard; float center = 1.0 - smoothstep(0.28, 0.34, radius); float outerRing = 1.0 - smoothstep(0.065, 0.11, abs(radius - 0.72)); diffuseColor.a *= max(center, outerRing);`
         : "if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard;";
-      shader.fragmentShader = shader.fragmentShader.replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>\n${markerShape}`);
+      shader.fragmentShader = shader.fragmentShader.replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>\ndiffuseColor.a *= vMarkerOpacity;\n${markerShape}`);
+      shader.fragmentShader = shader.fragmentShader.replace("#include <common>", "#include <common>\nvarying float vMarkerOpacity;");
     };
-    material.customProgramCacheKey = () => `earthview-hover-data-points-v1-${ringed}`;
+    material.customProgramCacheKey = () => `earthview-hover-data-points-v2-${ringed}`;
     return material;
   }, [ringed]);
 

@@ -8,14 +8,14 @@
   --color-muted: #777a7f;
   --color-body-muted: #707378;
   --color-divider: #dededb;
-  --color-panel: rgb(250 249 246 / 96%);
+  --color-panel: rgb(250 249 246 / 86%);
   --color-panel-soft: rgb(250 249 246 / 70%);
   --color-header-divider: #c6c6c4;
   --color-live-indicator: #12a751;
   --color-map-scale-text: #37393b;
   --color-map-scale-rule: #55585a;
   --color-layer-description: #7e8083;
-  --color-control-icon: #8d969a;
+  --color-control-icon: #777a7f;
   --color-status-error: #a03d2b;
   --color-orbital-disclosure: #74868a;
   --color-orbital-border: #e2e1de;
@@ -41,8 +41,8 @@
   --color-link-decoration: #aaaaaa;
   --color-ocean-blue: #0a3554;
   --color-country-line: #969590;
-  --color-earthquake: #e65342;
-  --color-fire: #f5a23b;
+  --color-earthquake: #a87800;
+  --color-fire: #d94a3e;
   --color-satellite: #587b83;
   --color-pipeline-gas: #408891;
   --color-pipeline-oil: #ad704f;

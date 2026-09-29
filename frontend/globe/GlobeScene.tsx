@@ -56,6 +56,9 @@ export type MapScale = { readonly distanceKm: number; readonly widthPx: number }
 
 const earthquakeSize = (earthquake: Earthquake) => Math.min(3, Math.max(0.75, 0.75 + Math.max(0, earthquake.magnitude) * 0.35));
 const fireSize = (fire: Fire) => Math.min(2.2, Math.max(0.75, 0.8 + Math.log1p(fire.frp ?? 0) * 0.22));
+const fireOpacity = (fire: Fire) => fire.frp === null
+  ? 0.65
+  : 0.35 + 0.6 * Math.min(1, Math.log1p(Math.max(0, fire.frp)) / Math.log1p(300));
 
 function RenderScheduler({ active }: { active: boolean }) {
   useFrame(({ invalidate }) => {
@@ -189,6 +192,7 @@ function GlobeSceneComponent({
             layerType="fires"
             hoveredId={hovered?.type === "fires" ? hovered.id : null}
             sizeFor={fireSize}
+            opacityFor={fireOpacity}
             onSelect={onFireSelect}
             onHover={onHover}
             onHoverEnd={onHoverEnd}
