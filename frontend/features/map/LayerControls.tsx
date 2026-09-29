@@ -35,12 +35,14 @@ export function LayerControls({ layers, selected, detailsRef, onClose, orbitalCo
   const [pipelinesOpen, setPipelinesOpen] = useState(false);
   return <>
     <aside className="layer-controls" aria-label="Data layer controls">
-      {layers.map((layer) => <LayerRow layer={layer} key={layer.id}
-        expanded={layer.id === "satellites" ? orbitalOpen : layer.id === "pipelines" ? pipelinesOpen : undefined}
-        onDisclosure={layer.id === "satellites" ? () => setOrbitalOpen((open) => !open) : layer.id === "pipelines" ? () => setPipelinesOpen((open) => !open) : undefined}>
-        {layer.id === "satellites" && orbitalOpen ? <OrbitalLayerOptions controls={orbitalControls} summaryItems={summaryItems} /> : null}
-        {layer.id === "pipelines" && pipelinesOpen ? <PipelineLayerOptions {...pipelineControls} /> : null}
-      </LayerRow>)}
+      <div className="layer-controls-scroll">
+        {layers.map((layer) => <LayerRow layer={layer} key={layer.id}
+          expanded={layer.id === "satellites" ? orbitalOpen : layer.id === "pipelines" ? pipelinesOpen : undefined}
+          onDisclosure={layer.id === "satellites" ? () => setOrbitalOpen((open) => !open) : layer.id === "pipelines" ? () => setPipelinesOpen((open) => !open) : undefined}>
+          {layer.id === "satellites" && orbitalOpen ? <OrbitalLayerOptions controls={orbitalControls} summaryItems={summaryItems} /> : null}
+          {layer.id === "pipelines" && pipelinesOpen ? <PipelineLayerOptions {...pipelineControls} /> : null}
+        </LayerRow>)}
+      </div>
     </aside>
     {selected?.type === "earthquakes" ? <EarthquakeDetails event={selected.event} detailsRef={detailsRef} onClose={onClose} />
       : selected?.type === "fires" ? <FireDetails event={selected.event} detailsRef={detailsRef} onClose={onClose} />

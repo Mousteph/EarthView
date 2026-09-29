@@ -1,5 +1,7 @@
 .layer-controls { position: absolute; z-index: 11; top: 116px; left: 3.15%; width: min(310px, 25vw); isolation: isolate; }
 
+.layer-controls-scroll { max-height: calc(100dvh - 136px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; -webkit-overflow-scrolling: touch; touch-action: pan-y; }
+
 .layer-row { border-bottom: 1px solid var(--color-divider); }
 
 .layer-actions { display: flex; align-items: center; justify-content: space-between; min-height: 68px; gap: 8px; }
@@ -239,6 +241,7 @@
 @media (max-width: 760px) {
   .event-connector { display: none; }
   .layer-controls { top: 90px; left: 20px; width: min(255px, calc(100vw - 40px)); }
+  .layer-controls-scroll { max-height: calc(100dvh - 110px); }
   .layer-actions { min-height: 60px; }
   .layer-copy strong { font-size: 10px; }
   .layer-copy > span { font-size: 10px; }
