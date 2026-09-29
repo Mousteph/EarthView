@@ -9,12 +9,15 @@ import { useMapLayers } from "./useMapLayers";
 import { GlobeScene, type MapScale } from "@/globe/GlobeScene";
 import type { SelectedPointScreenPosition } from "@/globe/points/PointLayer";
 import type { OrbitalMode, SelectedSatellitePosition } from "@/features/orbital/model";
+import type { PipelineFuel } from "@/features/pipelines/model";
+import { filterPipelines, reconcilePipelineStatusFilters as reconcilePipelineStatusFilterValues } from "@/features/pipelines/filters";
 import { orbitalVisibilityMask } from "@/features/orbital/filters";
 
 export function MapView() {
   const [hasInteracted, setHasInteracted] = useState(false);
-  const { earthquakesVisible, firesVisible, enabledOrbitalModes, orbitalFilters, selection,
+  const { earthquakesVisible, firesVisible, enabledOrbitalModes, enabledPipelineFuels, pipelineStatusFilters, orbitalFilters, selection,
     toggleEarthquakes: toggleEarthquakesState, toggleFires: toggleFiresState, toggleOrbitalMode,
+    togglePipelineFuel: togglePipelineFuelState, changePipelineStatusFilters, reconcilePipelineStatusFilters: reconcilePipelineStatusFilterState,
     changeOrbitalFilter, select, clearSelection, reconcileSelection } = useMapState();
   const satellitesVisible = enabledOrbitalModes.length > 0;
   const [selectedSatellitePosition, setSelectedSatellitePosition] = useState<SelectedSatellitePosition | null>(null);
@@ -29,26 +32,36 @@ export function MapView() {
   const {
     earthquakeFeed: earthquakesData,
     fireFeed: firesData,
+    pipelineFeeds,
     orbitalFeeds: { active: satellitesData, debris: debrisData, rocketBodies: rocketBodiesData },
     earthquakes,
     fires,
+    pipelines,
+    pipelineCatalog,
+    pipelineFilters,
+    pipelineCounts,
     satelliteCatalog,
     orbitalObjects,
     filterOptions,
     visibleMask,
     orbitalSummaryItems,
     refreshSatellites,
-  } = useMapLayers(enabledOrbitalModes, orbitalFilters);
+    refreshPipelines,
+  } = useMapLayers(enabledOrbitalModes, orbitalFilters, enabledPipelineFuels, pipelineStatusFilters);
   const selectionData: SelectionData = useMemo(() => ({
     earthquakes, fires, orbitalObjects, orbitalVisibility: visibleMask, earthquakesVisible, firesVisible,
     enabledOrbitalModes, selectedSatellitePosition,
-  }), [earthquakes, fires, orbitalObjects, visibleMask, earthquakesVisible, firesVisible, enabledOrbitalModes, selectedSatellitePosition]);
+    pipelines, enabledPipelineFuels,
+  }), [earthquakes, fires, orbitalObjects, visibleMask, earthquakesVisible, firesVisible, enabledOrbitalModes, selectedSatellitePosition, pipelines, enabledPipelineFuels]);
   const selected: SelectedEvent | null = resolveSelection(selection, selectionData);
   useEffect(() => {
     if (!selection || selected) return;
     const timeout = window.setTimeout(() => reconcileSelection(selectionData));
     return () => window.clearTimeout(timeout);
   }, [reconcileSelection, selected, selection, selectionData]);
+  useEffect(() => {
+    reconcilePipelineStatusFilterState(reconcilePipelineStatusFilterValues(pipelineStatusFilters, pipelineFilters));
+  }, [pipelineFilters, pipelineStatusFilters, reconcilePipelineStatusFilterState]);
 
   const reconcile = (next: SelectionData) => {
     reconcileSelection(next);
@@ -69,6 +82,17 @@ export function MapView() {
     reconcile({ ...selectionData, enabledOrbitalModes: nextModes });
     toggleOrbitalMode(mode);
   };
+  const handlePipelineFuelToggle = (fuel: PipelineFuel) => {
+    const nextFuels = enabledPipelineFuels.includes(fuel) ? enabledPipelineFuels.filter((item) => item !== fuel) : [...enabledPipelineFuels, fuel];
+    reconcile({ ...selectionData, enabledPipelineFuels: nextFuels });
+    togglePipelineFuelState(fuel);
+  };
+  const handlePipelineStatusChange = (fuel: PipelineFuel, values: readonly string[]) => {
+    const nextFilters = { ...pipelineStatusFilters, [fuel]: values };
+    const nextPipelines = filterPipelines(pipelineCatalog, nextFilters);
+    reconcile({ ...selectionData, pipelines: nextPipelines });
+    changePipelineStatusFilters(fuel, values);
+  };
   const handleOrbitalFilterChange = (group: keyof typeof orbitalFilters, values: readonly string[]) => {
     const nextFilters = { ...orbitalFilters, [group]: values };
     reconcile({ ...selectionData, orbitalVisibility: orbitalVisibilityMask(orbitalObjects, satelliteCatalog, nextFilters) });
@@ -77,6 +101,7 @@ export function MapView() {
   const refreshEarthquakes = () => void earthquakesData.refresh();
   const refreshFires = () => void firesData.refresh();
   const refreshSatelliteFeeds = () => void refreshSatellites();
+  const refreshPipelineFeeds = () => void refreshPipelines();
 
   const handleEarthquakeSelect = useCallback((id: string) => select({ type: "earthquakes", id }), [select]);
   const handleFireSelect = useCallback((id: string) => select({ type: "fires", id }), [select]);
@@ -84,6 +109,7 @@ export function MapView() {
     setSelectedSatellitePosition(null);
     select({ type: "satellites", id });
   }, [select]);
+  const handlePipelineSelect = useCallback((id: string) => select({ type: "pipelines", id }), [select]);
   const handleSelectedSatelliteData = useCallback((position: SelectedSatellitePosition | null) => {
     setSelectedSatellitePosition(position);
   }, []);
@@ -101,6 +127,13 @@ export function MapView() {
       error: enabledOrbitalModes.map((mode) => mode === "active" ? satellitesData.error : mode === "debris" ? debrisData.error : rocketBodiesData.error).find(Boolean) ?? null,
       stale: enabledOrbitalModes.some((mode) => mode === "active" ? satellitesData.stale : mode === "debris" ? debrisData.stale : rocketBodiesData.stale),
       count: orbitalSummaryItems.reduce((sum, item) => sum + (item.hasLoaded && enabledOrbitalModes.includes(item.id) ? item.count : 0), 0), onRefresh: refreshSatelliteFeeds },
+    { id: "pipelines", label: "Pipelines", description: "Global gas and oil transmission routes", visible: enabledPipelineFuels.length > 0,
+      hasLoaded: enabledPipelineFuels.some((fuel) => pipelineFeeds[fuel].hasLoaded),
+      isLoading: enabledPipelineFuels.some((fuel) => pipelineFeeds[fuel].isLoading),
+      error: enabledPipelineFuels.map((fuel) => pipelineFeeds[fuel].error).find(Boolean) ?? null,
+      stale: enabledPipelineFuels.some((fuel) => pipelineFeeds[fuel].feed?.stale),
+      count: enabledPipelineFuels.reduce((sum, fuel) => sum + (pipelineFeeds[fuel].hasLoaded ? pipelineCounts[fuel] : 0), 0),
+      onRefresh: refreshPipelineFeeds },
   ];
 
   const updateSelectedConnector = useCallback((position: SelectedPointScreenPosition | null) => {
@@ -150,6 +183,10 @@ export function MapView() {
           selectedSatelliteId={selection?.type === "satellites" && selected ? selection.id : null}
           onSatelliteSelect={handleSatelliteSelect}
           onSelectedSatelliteData={handleSelectedSatelliteData}
+          pipelines={pipelines}
+          pipelinesVisible={enabledPipelineFuels.length > 0}
+          selectedPipelineId={selected?.type === "pipelines" ? selected.event.id : null}
+          onPipelineSelect={handlePipelineSelect}
           selectedFireId={selection?.type === "fires" ? selection.id : null}
           onEarthquakeSelect={handleEarthquakeSelect}
           onFireSelect={handleFireSelect}
@@ -164,7 +201,10 @@ export function MapView() {
       <EarthViewHeader />
       <LayerControls layers={layers} selected={selected} detailsRef={detailsRef} onClose={clearSelection} summaryItems={orbitalSummaryItems}
         orbitalControls={{ enabledModes: enabledOrbitalModes, onModeToggle: handleOrbitalModeToggle, filters: filterOptions,
-          selectedFilters: orbitalFilters, onFilterChange: handleOrbitalFilterChange }} />
+          selectedFilters: orbitalFilters, onFilterChange: handleOrbitalFilterChange }}
+        pipelineControls={{ enabledFuels: enabledPipelineFuels, feeds: pipelineFeeds, statusOptions: pipelineFilters,
+          selectedStatuses: pipelineStatusFilters, counts: pipelineCounts, onToggle: handlePipelineFuelToggle,
+          onStatusChange: handlePipelineStatusChange }} />
       {mapScale ? <div className="map-scale" aria-label={`Scale: ${new Intl.NumberFormat("en-US").format(mapScale.distanceKm)} kilometers`}>
         <div className="map-scale-labels" style={{ width: `${mapScale.widthPx}px` }}>
           <span>0</span><span>{new Intl.NumberFormat("en-US").format(mapScale.distanceKm / 2)}</span><span>{new Intl.NumberFormat("en-US").format(mapScale.distanceKm)} km</span>

@@ -10,7 +10,14 @@ Read this guide before changing the globe's visual treatment, geography, camera 
 - Keep the current visual hierarchy and palette unless a visual redesign is explicitly requested. Review any token change on both the map and data routes.
 - Unknown orbital categories may keep deterministic generated colors.
 
-The reference composition uses a restrained header and left-side layer controls, with inspection content on the right. Keep the satellite modes and filters inside the existing expandable satellite section. On narrow screens, retain usable touch space and the established panel arrangement. Use the current controls and panels as the implementation reference when exact spacing or responsive behavior matters.
+The reference composition uses a restrained header and left-side layer controls, with inspection content on the right. Keep sublayer choices and related filters inside their layer's existing expandable section, with independent controls for independently visible data. On narrow screens, retain usable touch space and the established panel arrangement. Use the current controls and panels as the implementation reference when exact spacing or responsive behavior matters.
+
+## Data layer controls and inspection panels
+
+- Fit new layers into the existing control and panel layout. Put sublayer choices and related filters inside the layer's disclosure; keep sibling visibility controls independent and keep parent disclosure separate from child visibility toggles.
+- Use the same semantic accent for a layer's globe marks and its selected feature's primary name or value. Keep the panel category eyebrow, metadata labels, and body copy in the neutral inspection palette.
+- Use existing disclosure, toggle, badge, and filter treatments. Preserve keyboard and touch targets, readable counts, and the established narrow-screen arrangement rather than adding a new panel design for each layer.
+- Keep complete dataset attribution and licensing on `/data`; use concise item-specific source links in inspection panels when useful.
 
 ## Globe and geography
 

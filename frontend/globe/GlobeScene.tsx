@@ -8,9 +8,11 @@ import { useThree } from "@react-three/fiber";
 import type { Earthquake } from "@/features/earthquakes/model";
 import type { Fire } from "@/features/fires/model";
 import type { OrbitalObject, SelectedSatellitePosition } from "@/features/orbital/model";
+import type { Pipeline } from "@/features/pipelines/model";
 import { Earth } from "./relief/Earth";
 import { PointLayer, type SelectedPointScreenPosition } from "./points/PointLayer";
 import { SatelliteLayer } from "./orbital/SatelliteLayer";
+import { PipelineLayer } from "./pipelines/PipelineLayer";
 import { GeographicLayers } from "./geography/GeographicLayers";
 import type { GeographicLod } from "./geography/geography";
 import { RELIEF } from "./relief/relief";
@@ -34,9 +36,13 @@ type GlobeSceneProps = {
   readonly satellitesVisible: boolean;
   readonly satelliteVisibility: Uint8Array | null;
   readonly selectedSatelliteId: string | null;
+  readonly pipelines: readonly Pipeline[];
+  readonly pipelinesVisible: boolean;
+  readonly selectedPipelineId: string | null;
   readonly onEarthquakeSelect: (earthquakeId: string) => void;
   readonly onFireSelect: (fireId: string) => void;
   readonly onSatelliteSelect: (satelliteId: string) => void;
+  readonly onPipelineSelect: (pipelineId: string) => void;
   readonly onSelectedSatelliteData: (position: SelectedSatellitePosition | null) => void;
   readonly onSelectedPositionChange: (position: SelectedPointScreenPosition | null) => void;
   readonly onScaleChange: (scale: MapScale) => void;
@@ -126,9 +132,13 @@ function GlobeSceneComponent({
   satellitesVisible,
   satelliteVisibility,
   selectedSatelliteId,
+  pipelines,
+  pipelinesVisible,
+  selectedPipelineId,
   onEarthquakeSelect,
   onFireSelect,
   onSatelliteSelect,
+  onPipelineSelect,
   onSelectedSatelliteData,
   onSelectedPositionChange,
   onScaleChange,
@@ -150,6 +160,7 @@ function GlobeSceneComponent({
           <Suspense fallback={null}>
             <ReliefSurface onActiveLodChange={handleActiveLodChange} />
           </Suspense>
+          <PipelineLayer pipelines={pipelines} visible={pipelinesVisible} selectedId={selectedPipelineId} onSelect={onPipelineSelect} />
           <PointLayer
             entities={earthquakes}
             selectedId={selectedEarthquakeId}

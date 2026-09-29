@@ -3,6 +3,9 @@
 import { useMemo } from "react";
 import { useEarthquakes } from "@/features/earthquakes/useEarthquakes";
 import { useFires } from "@/features/fires/useFires";
+import { usePipelineFeeds } from "@/features/pipelines/usePipelineFeeds";
+import type { PipelineFuel } from "@/features/pipelines/model";
+import { filterPipelines, pipelineStatusOptions, type PipelineStatusFilters } from "@/features/pipelines/filters";
 import { composeOrbitalObjects, useOrbitalFeeds } from "@/features/orbital/useOrbitalFeeds";
 import type { OrbitalMode } from "@/features/orbital/model";
 import {
@@ -13,13 +16,27 @@ import {
   type OrbitalFilters,
 } from "@/features/orbital/filters";
 
-export function useMapLayers(enabledOrbitalModes: readonly OrbitalMode[], orbitalFilters: OrbitalFilters) {
+export function useMapLayers(enabledOrbitalModes: readonly OrbitalMode[], orbitalFilters: OrbitalFilters, enabledPipelineFuels: readonly PipelineFuel[], pipelineStatusFilters: PipelineStatusFilters) {
   const earthquakeFeed = useEarthquakes();
   const fireFeed = useFires();
   const orbitalFeeds = useOrbitalFeeds(enabledOrbitalModes);
+  const pipelineFeeds = usePipelineFeeds(enabledPipelineFuels);
   const { active: satellitesFeed, debris: debrisFeed, rocketBodies: rocketBodiesFeed } = orbitalFeeds;
   const earthquakes = earthquakeFeed.earthquakes;
   const fires = fireFeed.fires;
+  const pipelineCatalog = useMemo(
+    () => enabledPipelineFuels.flatMap((fuel) => pipelineFeeds.feeds[fuel].feed?.pipelines ?? []),
+    [enabledPipelineFuels, pipelineFeeds.feeds],
+  );
+  const pipelines = useMemo(() => filterPipelines(pipelineCatalog, pipelineStatusFilters), [pipelineCatalog, pipelineStatusFilters]);
+  const pipelineFilters = useMemo(
+    () => pipelineStatusOptions(Object.values(pipelineFeeds.feeds).flatMap((feed) => feed.feed?.pipelines ?? [])),
+    [pipelineFeeds.feeds],
+  );
+  const pipelineCounts = useMemo(() => ({
+    gas: pipelines.filter((pipeline) => pipeline.fuel === "gas").length,
+    oil: pipelines.filter((pipeline) => pipeline.fuel === "oil").length,
+  }), [pipelines]);
   const satelliteCatalog = satellitesFeed.satellites;
 
   const orbitalObjects = useMemo(() => composeOrbitalObjects(enabledOrbitalModes, {
@@ -53,14 +70,20 @@ export function useMapLayers(enabledOrbitalModes: readonly OrbitalMode[], orbita
   return {
     earthquakeFeed,
     fireFeed,
+    pipelineFeeds: pipelineFeeds.feeds,
     orbitalFeeds,
     earthquakes,
     fires,
+    pipelines,
+    pipelineCatalog,
+    pipelineFilters,
+    pipelineCounts,
     satelliteCatalog,
     orbitalObjects,
     filterOptions,
     visibleMask,
     orbitalSummaryItems,
     refreshSatellites: orbitalFeeds.refreshEnabled,
+    refreshPipelines: pipelineFeeds.refreshEnabled,
   };
 }
