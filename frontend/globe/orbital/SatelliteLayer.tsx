@@ -18,6 +18,8 @@ import { recordSatelliteWorkerCalculation, recordSatelliteWorkerCreated, recordS
 import { DESIGN_COLOR_TOKENS, readDesignColor } from "@/shared/designTokens";
 import { segmentHiddenByEarth, snapshotAlpha } from "./satelliteMath";
 import { orbitalObjectColor } from "@/features/orbital/colors";
+import type { HoverKey } from "@/features/map/hover";
+import { matrixChanged, pickingMatrixTolerance, saveMatrix, ScreenSpatialIndex } from "@/globe/interaction/ScreenSpatialIndex";
 import type { SelectedPointScreenPosition } from "../points/PointLayer";
 import type { OrbitalElements, SatelliteWorkerInput, SatelliteWorkerOutput } from "./satelliteProtocol";
 
@@ -25,7 +27,10 @@ type SatelliteLayerProps = {
   readonly satellites: readonly OrbitalObject[];
   readonly visibility: Uint8Array | null;
   readonly selectedId: string | null;
+  readonly hoveredId: string | null;
   readonly onSelect: (id: string) => void;
+  readonly onHover: (key: HoverKey, clientX: number, clientY: number, distance: number, event: PointerEvent) => void;
+  readonly onHoverEnd: (key: HoverKey) => void;
   readonly onSelectedData: (position: SelectedSatellitePosition | null) => void;
   readonly onSelectedPositionChange: (position: SelectedPointScreenPosition | null) => void;
 };
@@ -33,7 +38,7 @@ type SatelliteLayerProps = {
 type Snapshot = { first: Float32Array; second: Float32Array; startMs: number; endMs: number };
 
 const pointColors = new Map<string, Color>();
-const satellitePickRadiusPixels = 3;
+const satellitePickRadiusPixels = 6;
 const dragThresholdPixels = 5;
 
 function colorForObject(satellite: OrbitalObject): Color {
@@ -88,18 +93,23 @@ function setGeometryPositions(geometry: BufferGeometry, first: Float32Array, sec
   future.needsUpdate = true;
 }
 
-export function SatelliteLayer({ satellites, visibility, selectedId, onSelect, onSelectedData, onSelectedPositionChange }: SatelliteLayerProps) {
+export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, onSelect, onHover, onHoverEnd, onSelectedData, onSelectedPositionChange }: SatelliteLayerProps) {
   const { camera, gl, invalidate, size } = useThree();
   const group = useRef<Group>(null);
   const worker = useRef<Worker | null>(null);
   const snapshot = useRef<Snapshot | null>(null);
   const selectedIdRef = useRef(selectedId);
   const selectedIndexRef = useRef(-1);
+  const hoveredIdRef = useRef(hoveredId);
+  const hoveredIndexRef = useRef(-1);
   const onSelectRef = useRef(onSelect);
+  const onHoverRef = useRef(onHover);
+  const onHoverEndRef = useRef(onHoverEnd);
   const onDataRef = useRef(onSelectedData);
   const onScreenRef = useRef(onSelectedPositionChange);
   const markerMaterialRef = useRef<PointsMaterial | null>(null);
   const highlightMaterialRef = useRef<PointsMaterial | null>(null);
+  const hoverMaterialRef = useRef<PointsMaterial | null>(null);
   const projected = useMemo(() => new Vector3(), []);
   const cameraPosition = useMemo(() => new Vector3(), []);
   const geometry = useMemo(() => createGeometry(satellites.length), [satellites]);
@@ -113,11 +123,14 @@ export function SatelliteLayer({ satellites, visibility, selectedId, onSelect, o
     revolutionNumber: satellite.revolutionNumber,
   })), [satellites]);
   const selectedGeometry = useMemo(() => createGeometry(1), []);
+  const hoverGeometry = useMemo(() => createGeometry(1), []);
   const material = useMemo(() => createMaterial(3.4, false), []);
   const selectedMaterial = useMemo(() => createMaterial(12, true), []);
+  const hoverMaterial = useMemo(() => createMaterial(9, true), []);
   const pathMaterial = useMemo(() => new MeshBasicMaterial({ transparent: true, opacity: 0.82, depthTest: true, depthWrite: false }), []);
   const [path, setPath] = useState<{ id: string; positions: Float32Array } | null>(null);
   const selectedIndex = useMemo(() => satellites.findIndex((satellite) => satellite.id === selectedId), [satellites, selectedId]);
+  const hoveredIndex = useMemo(() => satellites.findIndex((satellite) => satellite.id === hoveredId), [satellites, hoveredId]);
   const pathGeometry = useMemo(() => path && path.id === selectedId ? (() => {
     const points = Array.from({ length: path.positions.length / 3 }, (_, index) => new Vector3(
       path.positions[index * 3], path.positions[index * 3 + 1], path.positions[index * 3 + 2],
@@ -127,11 +140,16 @@ export function SatelliteLayer({ satellites, visibility, selectedId, onSelect, o
 
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
   useEffect(() => { selectedIndexRef.current = selectedIndex; }, [selectedIndex]);
+  useEffect(() => { hoveredIdRef.current = hoveredId; }, [hoveredId]);
+  useEffect(() => { hoveredIndexRef.current = hoveredIndex; }, [hoveredIndex]);
   useEffect(() => { onSelectRef.current = onSelect; }, [onSelect]);
+  useEffect(() => { onHoverRef.current = onHover; }, [onHover]);
+  useEffect(() => { onHoverEndRef.current = onHoverEnd; }, [onHoverEnd]);
   useEffect(() => { onDataRef.current = onSelectedData; }, [onSelectedData]);
   useEffect(() => { onScreenRef.current = onSelectedPositionChange; }, [onSelectedPositionChange]);
   useEffect(() => { markerMaterialRef.current = material; }, [material]);
   useEffect(() => { highlightMaterialRef.current = selectedMaterial; }, [selectedMaterial]);
+  useEffect(() => { hoverMaterialRef.current = hoverMaterial; }, [hoverMaterial]);
   useEffect(() => {
     const colors = geometry.getAttribute("color") as BufferAttribute;
     const values = colors.array as Float32Array;
@@ -149,8 +167,9 @@ export function SatelliteLayer({ satellites, visibility, selectedId, onSelect, o
       : new Color(readDesignColor(DESIGN_COLOR_TOKENS.satellite));
     pathMaterial.color.copy(color);
     selectedMaterial.color.copy(color);
+    if (hoveredIndex >= 0) hoverMaterial.color.copy(colorForObject(satellites[hoveredIndex]));
     invalidate();
-  }, [invalidate, pathMaterial, satellites, selectedIndex, selectedMaterial]);
+  }, [hoverMaterial, hoveredIndex, invalidate, pathMaterial, satellites, selectedIndex, selectedMaterial]);
 
   useEffect(() => {
     const attribute = geometry.getAttribute("filterVisible") as BufferAttribute;
@@ -162,8 +181,10 @@ export function SatelliteLayer({ satellites, visibility, selectedId, onSelect, o
 
   useEffect(() => () => geometry.dispose(), [geometry]);
   useEffect(() => () => selectedGeometry.dispose(), [selectedGeometry]);
+  useEffect(() => () => hoverGeometry.dispose(), [hoverGeometry]);
   useEffect(() => () => material.dispose(), [material]);
   useEffect(() => () => selectedMaterial.dispose(), [selectedMaterial]);
+  useEffect(() => () => hoverMaterial.dispose(), [hoverMaterial]);
   useEffect(() => () => pathMaterial.dispose(), [pathMaterial]);
   useEffect(() => () => pathGeometry?.dispose(), [pathGeometry]);
 
@@ -183,6 +204,11 @@ export function SatelliteLayer({ satellites, visibility, selectedId, onSelect, o
         if (index >= 0) {
           const offset = index * 3;
           setGeometryPositions(selectedGeometry, first.subarray(offset, offset + 3), message.second.subarray(offset, offset + 3));
+        }
+        const hoveredIndex = hoveredIndexRef.current;
+        if (hoveredIndex >= 0) {
+          const offset = hoveredIndex * 3;
+          setGeometryPositions(hoverGeometry, first.subarray(offset, offset + 3), message.second.subarray(offset, offset + 3));
         }
         recordSatelliteWorkerCalculation(satellites.length, message.calculationMs);
         if (message.initializationMs !== undefined) recordSatelliteWorkerInitialization(message.initializationMs);
@@ -204,7 +230,7 @@ export function SatelliteLayer({ satellites, visibility, selectedId, onSelect, o
       onDataRef.current(null);
       onScreenRef.current(null);
     };
-  }, [geometry, invalidate, orbitElements, satellites.length, selectedGeometry]);
+  }, [geometry, hoverGeometry, invalidate, orbitElements, satellites.length, selectedGeometry]);
 
   useEffect(() => {
     worker.current?.postMessage({ type: "select", id: selectedId } satisfies SatelliteWorkerInput);
@@ -223,9 +249,30 @@ export function SatelliteLayer({ satellites, visibility, selectedId, onSelect, o
   }, [invalidate, satellites, selectedGeometry, selectedId]);
 
   useEffect(() => {
+    if (hoveredIndex < 0) return;
+    const current = snapshot.current;
+    if (current) {
+      const offset = hoveredIndex * 3;
+      setGeometryPositions(hoverGeometry, current.first.subarray(offset, offset + 3), current.second.subarray(offset, offset + 3));
+    }
+    if (hoveredIndex >= 0) hoverMaterial.color.copy(colorForObject(satellites[hoveredIndex]));
+    invalidate();
+  }, [hoverGeometry, hoverMaterial, hoveredIndex, invalidate, satellites]);
+
+  useEffect(() => {
     const canvas = gl.domElement;
     let activePointer: { id: number; x: number; y: number; dragged: boolean } | null = null;
     let suppressClickAfterDrag = false;
+    const pickIndex = new ScreenSpatialIndex();
+    let indexedFirst: Float32Array | null = null;
+    let indexedSecond: Float32Array | null = null;
+    let indexedCameraWorld: Float64Array | null = null;
+    let indexedCameraProjection: Float64Array | null = null;
+    let indexedGroupWorld: Float64Array | null = null;
+    let indexedWidth = 0;
+    let indexedHeight = 0;
+    const startProjected = new Vector3();
+    const endProjected = new Vector3();
     const updatePointerMovement = (event: PointerEvent) => {
       if (!activePointer || activePointer.id !== event.pointerId) return;
       if ((event.clientX - activePointer.x) ** 2 + (event.clientY - activePointer.y) ** 2 > dragThresholdPixels ** 2) {
@@ -236,7 +283,87 @@ export function SatelliteLayer({ satellites, visibility, selectedId, onSelect, o
       activePointer = { id: event.pointerId, x: event.clientX, y: event.clientY, dragged: false };
       suppressClickAfterDrag = false;
     };
-    const handlePointerMove = (event: PointerEvent) => updatePointerMovement(event);
+    const pickAt = (clientX: number, clientY: number) => {
+      if (!group.current || !snapshot.current) return { index: -1, depth: Infinity };
+      const bounds = canvas.getBoundingClientRect();
+      const current = snapshot.current;
+      camera.updateMatrixWorld();
+      group.current.updateWorldMatrix(true, false);
+      const matrixTolerance = pickingMatrixTolerance(camera.position.length());
+      if (indexedWidth !== bounds.width || indexedHeight !== bounds.height
+        || indexedFirst !== current.first || indexedSecond !== current.second
+        || matrixChanged(camera.matrixWorld.elements, indexedCameraWorld, matrixTolerance)
+        || matrixChanged(camera.projectionMatrix.elements, indexedCameraProjection, matrixTolerance)
+        || matrixChanged(group.current.matrixWorld.elements, indexedGroupWorld, matrixTolerance)) {
+        pickIndex.reset(bounds.width, bounds.height);
+        for (let index = 0; index < satellites.length; index += 1) {
+          if (visibility && !visibility[index]) continue;
+          const offset = index * 3;
+          if (current.first[offset] ** 2 + current.first[offset + 1] ** 2 + current.first[offset + 2] ** 2 < 0.5
+            || current.second[offset] ** 2 + current.second[offset + 1] ** 2 + current.second[offset + 2] ** 2 < 0.5) continue;
+          startProjected.set(current.first[offset], current.first[offset + 1], current.first[offset + 2]).applyMatrix4(group.current.matrixWorld).project(camera);
+          endProjected.set(current.second[offset], current.second[offset + 1], current.second[offset + 2]).applyMatrix4(group.current.matrixWorld).project(camera);
+          if ((startProjected.z < -1 && endProjected.z < -1) || (startProjected.z > 1 && endProjected.z > 1)) continue;
+          pickIndex.insertSegment(
+            (startProjected.x + 1) * bounds.width * 0.5,
+            (1 - startProjected.y) * bounds.height * 0.5,
+            (endProjected.x + 1) * bounds.width * 0.5,
+            (1 - endProjected.y) * bounds.height * 0.5,
+            index,
+            satellitePickRadiusPixels + 3,
+          );
+        }
+        indexedFirst = current.first;
+        indexedSecond = current.second;
+        indexedCameraWorld = saveMatrix(camera.matrixWorld.elements, indexedCameraWorld);
+        indexedCameraProjection = saveMatrix(camera.projectionMatrix.elements, indexedCameraProjection);
+        indexedGroupWorld = saveMatrix(group.current.matrixWorld.elements, indexedGroupWorld);
+        indexedWidth = bounds.width;
+        indexedHeight = bounds.height;
+      }
+
+      const pointerX = clientX - bounds.left;
+      const pointerY = clientY - bounds.top;
+      const candidates = pickIndex.query(pointerX, pointerY, satellitePickRadiusPixels);
+      const { first, second, startMs, endMs } = current;
+      const blend = snapshotAlpha(Date.now(), startMs, endMs);
+      camera.getWorldPosition(cameraPosition);
+      let bestIndex = -1;
+      let bestDistance = satellitePickRadiusPixels * satellitePickRadiusPixels;
+      let bestDepth = Infinity;
+      for (const index of candidates) {
+        if (visibility && !visibility[index]) continue;
+        const offset = index * 3;
+        const x = first[offset] + (second[offset] - first[offset]) * blend;
+        const y = first[offset + 1] + (second[offset + 1] - first[offset + 1]) * blend;
+        const z = first[offset + 2] + (second[offset + 2] - first[offset + 2]) * blend;
+        if (x * x + y * y + z * z < 0.5) continue;
+        projected.set(x, y, z).applyMatrix4(group.current.matrixWorld);
+        if (segmentHiddenByEarth(cameraPosition.x, cameraPosition.y, cameraPosition.z, projected.x, projected.y, projected.z)) continue;
+        const depth = projected.distanceToSquared(cameraPosition);
+        projected.project(camera);
+        if (projected.z < -1 || projected.z > 1) continue;
+        const screenX = (projected.x + 1) * bounds.width * 0.5;
+        const screenY = (1 - projected.y) * bounds.height * 0.5;
+        const distance = (screenX - pointerX) ** 2 + (screenY - pointerY) ** 2;
+        if (distance < bestDistance || (distance === bestDistance && depth < bestDepth)) {
+          bestIndex = index;
+          bestDistance = distance;
+          bestDepth = depth;
+        }
+      }
+      return { index: bestIndex, depth: bestDepth };
+    };
+    const handlePointerMove = (event: PointerEvent) => {
+      updatePointerMovement(event);
+      if (event.pointerType === "touch" || activePointer?.dragged) {
+        if (hoveredIdRef.current) onHoverEndRef.current({ type: "satellites", id: hoveredIdRef.current });
+        return;
+      }
+      const hit = pickAt(event.clientX, event.clientY);
+      if (hit.index >= 0) onHoverRef.current({ type: "satellites", id: satellites[hit.index].id }, event.clientX, event.clientY, Math.sqrt(hit.depth), event);
+      else if (hoveredIdRef.current) onHoverEndRef.current({ type: "satellites", id: hoveredIdRef.current });
+    };
     const handlePointerUp = (event: PointerEvent) => {
       updatePointerMovement(event);
       if (activePointer?.id === event.pointerId) {
@@ -257,48 +384,10 @@ export function SatelliteLayer({ satellites, visibility, selectedId, onSelect, o
         event.stopImmediatePropagation();
         return;
       }
-      if (!group.current || !snapshot.current) return;
-      const bounds = canvas.getBoundingClientRect();
-      const clickX = event.clientX - bounds.left;
-      const clickY = event.clientY - bounds.top;
-      const { first, second, startMs, endMs } = snapshot.current;
-      const blend = snapshotAlpha(Date.now(), startMs, endMs);
-      camera.getWorldPosition(cameraPosition);
-      group.current.updateWorldMatrix(true, false);
-      let bestIndex = -1;
-      let bestDistance = Infinity;
-      let bestDepth = Infinity;
-      for (let index = 0; index < satellites.length; index += 1) {
-        if (visibility && !visibility[index]) continue;
-        const offset = index * 3;
-        if (
-          first[offset] ** 2 + first[offset + 1] ** 2 + first[offset + 2] ** 2 < 0.5
-          || second[offset] ** 2 + second[offset + 1] ** 2 + second[offset + 2] ** 2 < 0.5
-        ) continue;
-        const x = first[offset] + (second[offset] - first[offset]) * blend;
-        const y = first[offset + 1] + (second[offset + 1] - first[offset + 1]) * blend;
-        const z = first[offset + 2] + (second[offset + 2] - first[offset + 2]) * blend;
-        if (x * x + y * y + z * z < 0.5) continue;
-        projected.set(x, y, z).applyMatrix4(group.current.matrixWorld);
-        if (segmentHiddenByEarth(cameraPosition.x, cameraPosition.y, cameraPosition.z, projected.x, projected.y, projected.z)) continue;
-        const depth = projected.distanceToSquared(cameraPosition);
-        projected.project(camera);
-        if (projected.z < -1 || projected.z > 1) continue;
-        const screenX = (projected.x + 1) * bounds.width * 0.5;
-        const screenY = (1 - projected.y) * bounds.height * 0.5;
-        const distance = (screenX - clickX) ** 2 + (screenY - clickY) ** 2;
-        if (
-          distance <= satellitePickRadiusPixels ** 2
-          && (distance < bestDistance || (distance === bestDistance && depth < bestDepth))
-        ) {
-          bestIndex = index;
-          bestDistance = distance;
-          bestDepth = depth;
-        }
-      }
-      if (bestIndex < 0) return;
+      const hit = pickAt(event.clientX, event.clientY);
+      if (hit.index < 0) return;
       event.stopPropagation();
-      onSelectRef.current(satellites[bestIndex].id);
+      onSelectRef.current(satellites[hit.index].id);
     };
     canvas.addEventListener("pointerdown", handlePointerDown, true);
     canvas.addEventListener("pointermove", handlePointerMove, true);
@@ -312,7 +401,7 @@ export function SatelliteLayer({ satellites, visibility, selectedId, onSelect, o
       canvas.removeEventListener("pointercancel", handlePointerCancel, true);
       canvas.removeEventListener("click", pick, true);
     };
-  }, [camera, cameraPosition, gl, projected, satellites, visibility]);
+  }, [camera, cameraPosition, gl, onHover, onHoverEnd, projected, satellites, visibility]);
 
   useFrame(() => {
     const current = snapshot.current;
@@ -320,6 +409,7 @@ export function SatelliteLayer({ satellites, visibility, selectedId, onSelect, o
     const blend = snapshotAlpha(Date.now(), current.startMs, current.endMs);
     if (markerMaterialRef.current) markerMaterialRef.current.userData.interpolationAlpha.value = blend;
     if (highlightMaterialRef.current) highlightMaterialRef.current.userData.interpolationAlpha.value = blend;
+    if (hoverMaterialRef.current) hoverMaterialRef.current.userData.interpolationAlpha.value = blend;
     if (!selectedIdRef.current || !group.current) return;
     const index = selectedIndexRef.current;
     if (index < 0) return;
@@ -355,6 +445,7 @@ export function SatelliteLayer({ satellites, visibility, selectedId, onSelect, o
 
   return <group ref={group}>
     <points geometry={geometry} material={material} frustumCulled={false} raycast={() => null} renderOrder={2} />
+    {hoveredId && hoveredId !== selectedId ? <points geometry={hoverGeometry} material={hoverMaterial} frustumCulled={false} raycast={() => null} renderOrder={2.5} /> : null}
     {selectedId ? <points geometry={selectedGeometry} material={selectedMaterial} frustumCulled={false} raycast={() => null} renderOrder={4} /> : null}
     {selectedId && pathGeometry ? <mesh geometry={pathGeometry} material={pathMaterial} frustumCulled={false} raycast={() => null} renderOrder={3} /> : null}
   </group>;

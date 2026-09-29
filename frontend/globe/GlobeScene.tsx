@@ -9,6 +9,7 @@ import type { Earthquake } from "@/features/earthquakes/model";
 import type { Fire } from "@/features/fires/model";
 import type { OrbitalObject, SelectedSatellitePosition } from "@/features/orbital/model";
 import type { Pipeline } from "@/features/pipelines/model";
+import type { HoverKey } from "@/features/map/hover";
 import { Earth } from "./relief/Earth";
 import { PointLayer, type SelectedPointScreenPosition } from "./points/PointLayer";
 import { SatelliteLayer } from "./orbital/SatelliteLayer";
@@ -46,6 +47,9 @@ type GlobeSceneProps = {
   readonly onSelectedSatelliteData: (position: SelectedSatellitePosition | null) => void;
   readonly onSelectedPositionChange: (position: SelectedPointScreenPosition | null) => void;
   readonly onScaleChange: (scale: MapScale) => void;
+  readonly hovered: HoverKey | null;
+  readonly onHover: (key: HoverKey, clientX: number, clientY: number, distance: number, event: PointerEvent) => void;
+  readonly onHoverEnd: (key: HoverKey) => void;
 };
 
 export type MapScale = { readonly distanceKm: number; readonly widthPx: number };
@@ -142,6 +146,9 @@ function GlobeSceneComponent({
   onSelectedSatelliteData,
   onSelectedPositionChange,
   onScaleChange,
+  hovered,
+  onHover,
+  onHoverEnd,
 }: GlobeSceneProps) {
   const debugEnabled = usePerformanceDebugEnabled();
   const [performance, setPerformance] = useState<PerformanceSnapshot | null>(null);
@@ -160,15 +167,19 @@ function GlobeSceneComponent({
           <Suspense fallback={null}>
             <ReliefSurface onActiveLodChange={handleActiveLodChange} />
           </Suspense>
-          <PipelineLayer pipelines={pipelines} visible={pipelinesVisible} selectedId={selectedPipelineId} onSelect={onPipelineSelect} />
+          <PipelineLayer pipelines={pipelines} visible={pipelinesVisible} selectedId={selectedPipelineId} hoveredId={hovered?.type === "pipelines" ? hovered.id : null} onSelect={onPipelineSelect} onHover={onHover} onHoverEnd={onHoverEnd} />
           <PointLayer
             entities={earthquakes}
             selectedId={selectedEarthquakeId}
             visible={earthquakesVisible}
             colorToken={DESIGN_COLOR_TOKENS.earthquake}
             ringed
+            layerType="earthquakes"
+            hoveredId={hovered?.type === "earthquakes" ? hovered.id : null}
             sizeFor={earthquakeSize}
             onSelect={onEarthquakeSelect}
+            onHover={onHover}
+            onHoverEnd={onHoverEnd}
             onSelectedPositionChange={onSelectedPositionChange}
           />
           <PointLayer
@@ -176,15 +187,22 @@ function GlobeSceneComponent({
             selectedId={selectedFireId}
             visible={firesVisible}
             colorToken={DESIGN_COLOR_TOKENS.fire}
+            layerType="fires"
+            hoveredId={hovered?.type === "fires" ? hovered.id : null}
             sizeFor={fireSize}
             onSelect={onFireSelect}
+            onHover={onHover}
+            onHoverEnd={onHoverEnd}
             onSelectedPositionChange={onSelectedPositionChange}
           />
           {satellitesVisible && satellites.length > 0 ? <SatelliteLayer
             satellites={satellites}
             visibility={satelliteVisibility}
             selectedId={selectedSatelliteId}
+            hoveredId={hovered?.type === "satellites" ? hovered.id : null}
             onSelect={onSatelliteSelect}
+            onHover={onHover}
+            onHoverEnd={onHoverEnd}
             onSelectedData={onSelectedSatelliteData}
             onSelectedPositionChange={onSelectedPositionChange}
           /> : null}
