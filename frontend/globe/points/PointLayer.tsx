@@ -16,7 +16,7 @@ import type { GeoEvent } from "@/shared/geoEvent";
 import { geoToVector3 } from "@/globe/geo";
 import { readDesignColor, type DesignColorToken } from "@/shared/designTokens";
 import type { HoverKey } from "@/features/map/hover";
-import { matrixChanged, pickingMatrixTolerance, saveMatrix, ScreenSpatialIndex } from "@/globe/interaction/ScreenSpatialIndex";
+import { ScreenSpatialIndex } from "@/globe/interaction/ScreenSpatialIndex";
 
 type PointLayerProps<T extends GeoEvent> = {
   readonly entities: readonly T[];
@@ -132,18 +132,10 @@ export function PointLayer<T extends GeoEvent>({
   const geometry = useMemo(() => createPointGeometry(positions, sizes), [positions, sizes]);
   const picking = useMemo(() => ({
     index: new ScreenSpatialIndex(),
-    cameraWorld: null as Float64Array | null,
-    cameraProjection: null as Float64Array | null,
-    objectWorld: null as Float64Array | null,
-    width: 0,
-    height: 0,
     x: new Float32Array(entities.length),
     y: new Float32Array(entities.length),
     depth: new Float32Array(entities.length),
-    world: new Float32Array(entities.length * 3),
-    visible: new Uint8Array(entities.length),
   }), [entities.length]);
-  const pickingSource = useRef(positions);
   const worldPoint = useMemo(() => new Vector3(), []);
   const projectedPoint = useMemo(() => new Vector3(), []);
   const cameraPositionForPick = useMemo(() => new Vector3(), []);
@@ -154,15 +146,17 @@ export function PointLayer<T extends GeoEvent>({
   ) {
     camera.updateMatrixWorld();
     this.updateWorldMatrix(true, false);
-    const matrixTolerance = pickingMatrixTolerance(camera.position.length());
-    const needsRebuild = picking.width !== size.width || picking.height !== size.height
-      || pickingSource.current !== positions
-      || matrixChanged(camera.matrixWorld.elements, picking.cameraWorld, matrixTolerance)
-      || matrixChanged(camera.projectionMatrix.elements, picking.cameraProjection, matrixTolerance)
-      || matrixChanged(this.matrixWorld.elements, picking.objectWorld);
-    if (needsRebuild) {
-      pickingSource.current = positions;
-      picking.index.reset(size.width, size.height);
+    const snapshot = {
+      width: size.width,
+      height: size.height,
+      cameraWorld: camera.matrixWorld.elements,
+      cameraProjection: camera.projectionMatrix.elements,
+      objectWorld: this.matrixWorld.elements,
+      cameraDistance: camera.position.length(),
+      source: positions,
+    };
+    if (picking.index.isStale(snapshot)) {
+      picking.index.reset(snapshot);
       camera.getWorldPosition(cameraPositionForPick);
       for (let index = 0; index < positions.length; index += 1) {
         worldPoint.copy(positions[index]).applyMatrix4(this.matrixWorld);
@@ -170,31 +164,16 @@ export function PointLayer<T extends GeoEvent>({
         const towardCameraY = cameraPositionForPick.y - worldPoint.y;
         const towardCameraZ = cameraPositionForPick.z - worldPoint.z;
         const normalLength = Math.max(worldPoint.length(), 1e-9);
-        if ((worldPoint.x * towardCameraX + worldPoint.y * towardCameraY + worldPoint.z * towardCameraZ) / normalLength <= 0) {
-          picking.visible[index] = 0;
-          continue;
-        }
+        if ((worldPoint.x * towardCameraX + worldPoint.y * towardCameraY + worldPoint.z * towardCameraZ) / normalLength <= 0) continue;
         projectedPoint.copy(worldPoint).project(camera);
-        if (projectedPoint.z < -1 || projectedPoint.z > 1) {
-          picking.visible[index] = 0;
-          continue;
-        }
+        if (projectedPoint.z < -1 || projectedPoint.z > 1) continue;
         const x = (projectedPoint.x + 1) * size.width * 0.5;
         const y = (1 - projectedPoint.y) * size.height * 0.5;
         picking.x[index] = x;
         picking.y[index] = y;
         picking.depth[index] = worldPoint.distanceToSquared(cameraPositionForPick);
-        picking.world[index * 3] = worldPoint.x;
-        picking.world[index * 3 + 1] = worldPoint.y;
-        picking.world[index * 3 + 2] = worldPoint.z;
-        picking.visible[index] = 1;
         picking.index.insertPoint(x, y, index);
       }
-      picking.cameraWorld = saveMatrix(camera.matrixWorld.elements, picking.cameraWorld);
-      picking.cameraProjection = saveMatrix(camera.projectionMatrix.elements, picking.cameraProjection);
-      picking.objectWorld = saveMatrix(this.matrixWorld.elements, picking.objectWorld);
-      picking.width = size.width;
-      picking.height = size.height;
     }
 
     const pointerX = (pointer.x + 1) * size.width * 0.5;
@@ -204,7 +183,6 @@ export function PointLayer<T extends GeoEvent>({
     let bestDistance = pointPickRadiusPixels * pointPickRadiusPixels;
     let bestDepth = Infinity;
     for (const index of candidates) {
-      if (!picking.visible[index]) continue;
       const distance = (picking.x[index] - pointerX) ** 2 + (picking.y[index] - pointerY) ** 2;
       if (distance < bestDistance || (distance === bestDistance && picking.depth[index] < bestDepth)) {
         bestIndex = index;
@@ -216,7 +194,7 @@ export function PointLayer<T extends GeoEvent>({
       intersections.push({
         distance: Math.sqrt(bestDepth),
         distanceToRay: Math.sqrt(bestDistance),
-        point: new Vector3(picking.world[bestIndex * 3], picking.world[bestIndex * 3 + 1], picking.world[bestIndex * 3 + 2]),
+        point: worldPoint.copy(positions[bestIndex]).applyMatrix4(this.matrixWorld).clone(),
         object: this,
         index: bestIndex,
       } as Intersection);

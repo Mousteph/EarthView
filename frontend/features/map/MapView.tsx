@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { EarthViewHeader } from "@/shared/ui/EarthViewHeader";
 import { LayerControls, type LayerControl } from "./LayerControls";
 import { resolveSelection, type SelectedEvent, type SelectionData } from "./selection";
-import { resolveHoverTooltip, type HoverData, type HoverKey } from "./hover";
+import type { HoverData } from "./hover";
+import { useGlobeHover } from "./useGlobeHover";
 import { useMapState } from "./useMapState";
 import { useMapLayers } from "./useMapLayers";
 import { GlobeScene, type MapScale } from "@/globe/GlobeScene";
@@ -17,7 +18,7 @@ import { orbitalObjectColor } from "@/features/orbital/colors";
 
 export function MapView() {
   const [hasInteracted, setHasInteracted] = useState(false);
-  const [hoverKey, setHoverKey] = useState<HoverKey | null>(null);
+  const markInteracted = useCallback(() => setHasInteracted(true), []);
   const { earthquakesVisible, firesVisible, enabledOrbitalModes, enabledPipelineFuels, pipelineStatusFilters, orbitalFilters, selection,
     toggleEarthquakes: toggleEarthquakesState, toggleFires: toggleFiresState, toggleOrbitalMode,
     togglePipelineFuel: togglePipelineFuelState, changePipelineStatusFilters, reconcilePipelineStatusFilters: reconcilePipelineStatusFilterState,
@@ -32,13 +33,6 @@ export function MapView() {
   const connectorPathRef = useRef<SVGPathElement>(null);
   const connectorRingRef = useRef<SVGCircleElement>(null);
   const detailsRef = useRef<HTMLElement>(null);
-  const globeCanvasRef = useRef<HTMLDivElement>(null);
-  const hoverTooltipRef = useRef<HTMLDivElement>(null);
-  const hoverKeyRef = useRef<HoverKey | null>(null);
-  const hoverPositionRef = useRef<{ readonly x: number; readonly y: number } | null>(null);
-  const activePointerRef = useRef<{ readonly id: number; readonly x: number; readonly y: number; dragged: boolean } | null>(null);
-  const pendingHoverRef = useRef<{ readonly key: HoverKey; readonly x: number; readonly y: number; readonly distance: number; readonly event: PointerEvent } | null>(null);
-  const hoverFrameRef = useRef<number | null>(null);
   const {
     earthquakeFeed: earthquakesData,
     fireFeed: firesData,
@@ -69,7 +63,11 @@ export function MapView() {
     satellitesVisible, pipelines, pipelinesVisible: enabledPipelineFuels.length > 0,
     orbitalColorFor: orbitalObjectColor,
   }), [earthquakes, fires, orbitalObjects, visibleMask, earthquakesVisible, firesVisible, satellitesVisible, pipelines, enabledPipelineFuels]);
-  const hoverTooltip = useMemo(() => resolveHoverTooltip(hoverKey, hoverData), [hoverData, hoverKey]);
+  const {
+    hoverTooltip, hovered, globeCanvasRef, hoverTooltipRef,
+    handleHover, handleHoverEnd, clearHover, handlePointerEnter, handlePointerDown, handlePointerMove,
+    handlePointerUp, handlePointerCancel,
+  } = useGlobeHover(hoverData, markInteracted);
   useEffect(() => {
     if (!selection || selected) return;
     const timeout = window.setTimeout(() => reconcileSelection(selectionData));
@@ -130,109 +128,6 @@ export function MapView() {
     setSelectedSatellitePosition(position);
   }, []);
 
-  const positionHoverTooltip = useCallback((clientX: number, clientY: number) => {
-    hoverPositionRef.current = { x: clientX, y: clientY };
-    const root = globeCanvasRef.current?.parentElement;
-    const tooltip = hoverTooltipRef.current;
-    if (!root || !tooltip || !hoverKeyRef.current || activePointerRef.current?.dragged) return;
-    const bounds = root.getBoundingClientRect();
-    const width = tooltip.offsetWidth;
-    const height = tooltip.offsetHeight;
-    const localX = clientX - bounds.left;
-    const localY = clientY - bounds.top;
-    const gap = 14;
-    const left = localX + width + gap <= bounds.width ? localX + gap : Math.max(0, localX - width - gap);
-    const top = localY + height + gap <= bounds.height ? localY + gap : Math.max(0, localY - height - gap);
-    tooltip.style.transform = `translate3d(${left}px, ${top}px, 0)`;
-  }, []);
-
-  const handleHover = useCallback((key: HoverKey, clientX: number, clientY: number, distance: number, event: PointerEvent) => {
-    if (activePointerRef.current?.dragged) return;
-    const pending = pendingHoverRef.current;
-    if (!pending || pending.event !== event || distance < pending.distance) pendingHoverRef.current = { key, x: clientX, y: clientY, distance, event };
-    positionHoverTooltip(clientX, clientY);
-    if (hoverFrameRef.current === null) {
-      hoverFrameRef.current = requestAnimationFrame(() => {
-        hoverFrameRef.current = null;
-        const next = pendingHoverRef.current;
-        pendingHoverRef.current = null;
-        if (!next || activePointerRef.current?.dragged) return;
-        hoverKeyRef.current = next.key;
-        setHoverKey((current) => current?.type === next.key.type && current.id === next.key.id ? current : next.key);
-        positionHoverTooltip(next.x, next.y);
-      });
-    }
-  }, [positionHoverTooltip]);
-
-  const handleHoverEnd = useCallback((key: HoverKey) => {
-    const current = hoverKeyRef.current;
-    const pending = pendingHoverRef.current;
-    if (pending?.key.type === key.type && pending.key.id === key.id) pendingHoverRef.current = null;
-    if (!current || current.type !== key.type || current.id !== key.id) return;
-    hoverKeyRef.current = null;
-    setHoverKey(null);
-  }, []);
-
-  const clearHover = useCallback(() => {
-    pendingHoverRef.current = null;
-    if (hoverFrameRef.current !== null) cancelAnimationFrame(hoverFrameRef.current);
-    hoverFrameRef.current = null;
-    hoverKeyRef.current = null;
-    setHoverKey(null);
-  }, []);
-
-  useEffect(() => {
-    if (!hoverKey || hoverTooltip) return;
-    const timeout = window.setTimeout(clearHover);
-    return () => window.clearTimeout(timeout);
-  }, [clearHover, hoverKey, hoverTooltip]);
-
-  useEffect(() => {
-    const canvas = globeCanvasRef.current?.querySelector("canvas");
-    if (canvas) canvas.style.cursor = hoverTooltip && !activePointerRef.current?.dragged ? "pointer" : "";
-  }, [hoverTooltip]);
-
-  useEffect(() => {
-    if (hoverTooltip && hoverPositionRef.current) positionHoverTooltip(hoverPositionRef.current.x, hoverPositionRef.current.y);
-  }, [hoverTooltip, positionHoverTooltip]);
-
-  const handlePointerDown = (event: ReactPointerEvent<HTMLElement>) => {
-    setHasInteracted(true);
-    if (!(event.target instanceof HTMLCanvasElement) || event.pointerType === "touch") return;
-    activePointerRef.current = { id: event.pointerId, x: event.clientX, y: event.clientY, dragged: false };
-  };
-
-  const handlePointerMove = (event: ReactPointerEvent<HTMLElement>) => {
-    if (event.target instanceof HTMLCanvasElement && event.pointerType !== "touch") setHasInteracted(true);
-    const active = activePointerRef.current;
-    if (active && active.id === event.pointerId && !active.dragged
-      && (event.clientX - active.x) ** 2 + (event.clientY - active.y) ** 2 > 25) {
-      active.dragged = true;
-      clearHover();
-    }
-    if (event.pointerType !== "touch") positionHoverTooltip(event.clientX, event.clientY);
-  };
-
-  const handlePointerUp = (event: ReactPointerEvent<HTMLElement>) => {
-    const active = activePointerRef.current;
-    if (!active || active.id !== event.pointerId) return;
-    const dragged = active.dragged;
-    activePointerRef.current = null;
-    if (!dragged || event.pointerType === "touch") return;
-    requestAnimationFrame(() => {
-      const canvas = globeCanvasRef.current?.querySelector("canvas");
-      if (!canvas) return;
-      canvas.dispatchEvent(new PointerEvent("pointermove", {
-        bubbles: true,
-        clientX: event.clientX,
-        clientY: event.clientY,
-        pointerId: event.pointerId,
-        pointerType: event.pointerType,
-        isPrimary: true,
-      }));
-    });
-  };
-
   const layers: LayerControl[] = [
     { id: "earthquakes", label: "Earthquakes", description: "Seismic activity, real time", visible: earthquakesVisible,
       hasLoaded: earthquakesData.hasLoaded, isLoading: earthquakesData.isLoading, error: earthquakesData.error,
@@ -287,11 +182,11 @@ export function MapView() {
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      onPointerCancel={() => { activePointerRef.current = null; clearHover(); }}
+      onPointerCancel={handlePointerCancel}
       onWheel={() => setHasInteracted(true)}
     >
       <div className="stage-title stage-title-left" aria-hidden="true">View<span>.</span></div>
-      <div className="globe-canvas" ref={globeCanvasRef} onPointerLeave={clearHover}>
+      <div className="globe-canvas" ref={globeCanvasRef} onPointerEnter={handlePointerEnter} onPointerLeave={clearHover}>
         <GlobeScene
           autoRotate={!hasInteracted}
           earthquakes={earthquakes}
@@ -314,7 +209,7 @@ export function MapView() {
           onFireSelect={handleFireSelect}
           onSelectedPositionChange={updateSelectedConnector}
           onScaleChange={handleScaleChange}
-          hovered={hoverTooltip ? hoverKey : null}
+          hovered={hovered}
           onHover={handleHover}
           onHoverEnd={handleHoverEnd}
         />

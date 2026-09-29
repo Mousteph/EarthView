@@ -113,8 +113,7 @@ function GlobeControls({
     autoRotate={autoRotate}
     autoRotateSpeed={0.16}
     enablePan={false}
-    enableDamping
-    dampingFactor={0.12}
+    enableDamping={false}
     rotateSpeed={0.25}
     zoomSpeed={0.28}
     minDistance={1.15}

@@ -1,4 +1,23 @@
-/** A small fixed-size screen grid used to reduce per-pointer work on batched geometry. */
+export type ScreenSpatialSnapshot = {
+  readonly width: number;
+  readonly height: number;
+  readonly cameraWorld: ArrayLike<number>;
+  readonly cameraProjection: ArrayLike<number>;
+  readonly objectWorld: ArrayLike<number>;
+  readonly cameraDistance: number;
+  readonly source: object;
+};
+
+type StoredSnapshot = {
+  readonly width: number;
+  readonly height: number;
+  readonly cameraWorld: Float64Array;
+  readonly cameraProjection: Float64Array;
+  readonly objectWorld: Float64Array;
+  readonly source: object;
+};
+
+/** A screen grid and the transform snapshot that makes its contents valid. */
 export class ScreenSpatialIndex {
   private readonly cellSize: number;
   private columns = 1;
@@ -7,15 +26,35 @@ export class ScreenSpatialIndex {
   private marks = new Uint32Array(0);
   private queryStamp = 0;
   private readonly results: number[] = [];
+  private snapshot: StoredSnapshot | null = null;
 
   constructor(cellSize = 24) {
     this.cellSize = Math.max(8, cellSize);
   }
 
-  reset(width: number, height: number) {
-    this.columns = Math.max(1, Math.ceil(width / this.cellSize));
-    this.rows = Math.max(1, Math.ceil(height / this.cellSize));
+  isStale(snapshot: ScreenSpatialSnapshot) {
+    const stored = this.snapshot;
+    if (!stored) return true;
+    const tolerance = pickingMatrixTolerance(snapshot.cameraDistance);
+    return stored.width !== snapshot.width || stored.height !== snapshot.height
+      || stored.source !== snapshot.source
+      || matrixChanged(snapshot.cameraWorld, stored.cameraWorld, tolerance)
+      || matrixChanged(snapshot.cameraProjection, stored.cameraProjection, tolerance)
+      || matrixChanged(snapshot.objectWorld, stored.objectWorld, tolerance);
+  }
+
+  reset(snapshot: ScreenSpatialSnapshot) {
+    this.columns = Math.max(1, Math.ceil(snapshot.width / this.cellSize));
+    this.rows = Math.max(1, Math.ceil(snapshot.height / this.cellSize));
     this.buckets = new Map();
+    this.snapshot = {
+      width: snapshot.width,
+      height: snapshot.height,
+      cameraWorld: saveMatrix(snapshot.cameraWorld, this.snapshot?.cameraWorld ?? null),
+      cameraProjection: saveMatrix(snapshot.cameraProjection, this.snapshot?.cameraProjection ?? null),
+      objectWorld: saveMatrix(snapshot.objectWorld, this.snapshot?.objectWorld ?? null),
+      source: snapshot.source,
+    };
   }
 
   insertPoint(x: number, y: number, index: number) {

@@ -19,7 +19,7 @@ import { DESIGN_COLOR_TOKENS, readDesignColor } from "@/shared/designTokens";
 import { segmentHiddenByEarth, snapshotAlpha } from "./satelliteMath";
 import { orbitalObjectColor } from "@/features/orbital/colors";
 import type { HoverKey } from "@/features/map/hover";
-import { matrixChanged, pickingMatrixTolerance, saveMatrix, ScreenSpatialIndex } from "@/globe/interaction/ScreenSpatialIndex";
+import { ScreenSpatialIndex } from "@/globe/interaction/ScreenSpatialIndex";
 import type { SelectedPointScreenPosition } from "../points/PointLayer";
 import type { OrbitalElements, SatelliteWorkerInput, SatelliteWorkerOutput } from "./satelliteProtocol";
 
@@ -264,13 +264,6 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
     let activePointer: { id: number; x: number; y: number; dragged: boolean } | null = null;
     let suppressClickAfterDrag = false;
     const pickIndex = new ScreenSpatialIndex();
-    let indexedFirst: Float32Array | null = null;
-    let indexedSecond: Float32Array | null = null;
-    let indexedCameraWorld: Float64Array | null = null;
-    let indexedCameraProjection: Float64Array | null = null;
-    let indexedGroupWorld: Float64Array | null = null;
-    let indexedWidth = 0;
-    let indexedHeight = 0;
     const startProjected = new Vector3();
     const endProjected = new Vector3();
     const updatePointerMovement = (event: PointerEvent) => {
@@ -289,13 +282,17 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
       const current = snapshot.current;
       camera.updateMatrixWorld();
       group.current.updateWorldMatrix(true, false);
-      const matrixTolerance = pickingMatrixTolerance(camera.position.length());
-      if (indexedWidth !== bounds.width || indexedHeight !== bounds.height
-        || indexedFirst !== current.first || indexedSecond !== current.second
-        || matrixChanged(camera.matrixWorld.elements, indexedCameraWorld, matrixTolerance)
-        || matrixChanged(camera.projectionMatrix.elements, indexedCameraProjection, matrixTolerance)
-        || matrixChanged(group.current.matrixWorld.elements, indexedGroupWorld, matrixTolerance)) {
-        pickIndex.reset(bounds.width, bounds.height);
+      const indexSnapshot = {
+        width: bounds.width,
+        height: bounds.height,
+        cameraWorld: camera.matrixWorld.elements,
+        cameraProjection: camera.projectionMatrix.elements,
+        objectWorld: group.current.matrixWorld.elements,
+        cameraDistance: camera.position.length(),
+        source: current,
+      };
+      if (pickIndex.isStale(indexSnapshot)) {
+        pickIndex.reset(indexSnapshot);
         for (let index = 0; index < satellites.length; index += 1) {
           if (visibility && !visibility[index]) continue;
           const offset = index * 3;
@@ -313,13 +310,6 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
             satellitePickRadiusPixels + 3,
           );
         }
-        indexedFirst = current.first;
-        indexedSecond = current.second;
-        indexedCameraWorld = saveMatrix(camera.matrixWorld.elements, indexedCameraWorld);
-        indexedCameraProjection = saveMatrix(camera.projectionMatrix.elements, indexedCameraProjection);
-        indexedGroupWorld = saveMatrix(group.current.matrixWorld.elements, indexedGroupWorld);
-        indexedWidth = bounds.width;
-        indexedHeight = bounds.height;
       }
 
       const pointerX = clientX - bounds.left;

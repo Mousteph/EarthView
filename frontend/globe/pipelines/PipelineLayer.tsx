@@ -17,7 +17,7 @@ import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js
 import type { Pipeline, PipelineCoordinate, PipelineFuel } from "@/features/pipelines/model";
 import type { HoverKey } from "@/features/map/hover";
 import { DESIGN_COLOR_TOKENS, readDesignColor } from "@/shared/designTokens";
-import { matrixChanged, pickingMatrixTolerance, saveMatrix, ScreenSpatialIndex } from "@/globe/interaction/ScreenSpatialIndex";
+import { ScreenSpatialIndex } from "@/globe/interaction/ScreenSpatialIndex";
 import { routeRangeForSegment, type PipelineRouteRange } from "./picking";
 
 type PipelineGeometry = {
@@ -289,17 +289,10 @@ function createPipelinePickingCache(batch: PipelineGeometry) {
   const segmentCount = (batch.geometry.getAttribute("position").count / 2) | 0;
   return {
     index: new ScreenSpatialIndex(),
-    cameraWorld: null as Float64Array | null,
-    cameraProjection: null as Float64Array | null,
-    objectWorld: null as Float64Array | null,
-    width: 0,
-    height: 0,
     startX: new Float32Array(segmentCount),
     startY: new Float32Array(segmentCount),
     endX: new Float32Array(segmentCount),
     endY: new Float32Array(segmentCount),
-    startWorld: new Float32Array(segmentCount * 3),
-    endWorld: new Float32Array(segmentCount * 3),
   };
 }
 
@@ -360,13 +353,18 @@ export function PipelineLayer({ pipelines, visible, selectedId, hoveredId, onSel
   ) {
     camera.updateMatrixWorld();
     this.updateWorldMatrix(true, false);
-    const matrixTolerance = pickingMatrixTolerance(camera.position.length());
-    if (cache.width !== size.width || cache.height !== size.height
-      || matrixChanged(camera.matrixWorld.elements, cache.cameraWorld, matrixTolerance)
-      || matrixChanged(camera.projectionMatrix.elements, cache.cameraProjection, matrixTolerance)
-      || matrixChanged(this.matrixWorld.elements, cache.objectWorld)) {
-      cache.index.reset(size.width, size.height);
-      const positions = batch.geometry.getAttribute("position").array as Float32Array;
+    const snapshot = {
+      width: size.width,
+      height: size.height,
+      cameraWorld: camera.matrixWorld.elements,
+      cameraProjection: camera.projectionMatrix.elements,
+      objectWorld: this.matrixWorld.elements,
+      cameraDistance: camera.position.length(),
+      source: batch.geometry,
+    };
+    const positions = batch.geometry.getAttribute("position").array as Float32Array;
+    if (cache.index.isStale(snapshot)) {
+      cache.index.reset(snapshot);
       const segmentCount = positions.length / 6;
       for (let segment = 0; segment < segmentCount; segment += 1) {
         const offset = segment * 6;
@@ -383,19 +381,8 @@ export function PipelineLayer({ pipelines, visible, selectedId, hoveredId, onSel
         cache.startY[segment] = y1;
         cache.endX[segment] = x2;
         cache.endY[segment] = y2;
-        cache.startWorld[segment * 3] = worldStart.x;
-        cache.startWorld[segment * 3 + 1] = worldStart.y;
-        cache.startWorld[segment * 3 + 2] = worldStart.z;
-        cache.endWorld[segment * 3] = worldEnd.x;
-        cache.endWorld[segment * 3 + 1] = worldEnd.y;
-        cache.endWorld[segment * 3 + 2] = worldEnd.z;
         cache.index.insertSegment(x1, y1, x2, y2, segment, pickRadiusPixels);
       }
-      cache.cameraWorld = saveMatrix(camera.matrixWorld.elements, cache.cameraWorld);
-      cache.cameraProjection = saveMatrix(camera.projectionMatrix.elements, cache.cameraProjection);
-      cache.objectWorld = saveMatrix(this.matrixWorld.elements, cache.objectWorld);
-      cache.width = size.width;
-      cache.height = size.height;
     }
 
     const pointerX = (pointer.x + 1) * size.width * 0.5;
@@ -419,10 +406,12 @@ export function PipelineLayer({ pipelines, visible, selectedId, hoveredId, onSel
       const closestY = y1 + dy * fraction;
       const distance = (closestX - pointerX) ** 2 + (closestY - pointerY) ** 2;
       if (distance > bestDistance) continue;
-      const offset = segment * 3;
-      const worldX = cache.startWorld[offset] + (cache.endWorld[offset] - cache.startWorld[offset]) * fraction;
-      const worldY = cache.startWorld[offset + 1] + (cache.endWorld[offset + 1] - cache.startWorld[offset + 1]) * fraction;
-      const worldZ = cache.startWorld[offset + 2] + (cache.endWorld[offset + 2] - cache.startWorld[offset + 2]) * fraction;
+      const offset = segment * 6;
+      worldStart.set(positions[offset], positions[offset + 1], positions[offset + 2]).applyMatrix4(this.matrixWorld);
+      worldEnd.set(positions[offset + 3], positions[offset + 4], positions[offset + 5]).applyMatrix4(this.matrixWorld);
+      const worldX = worldStart.x + (worldEnd.x - worldStart.x) * fraction;
+      const worldY = worldStart.y + (worldEnd.y - worldStart.y) * fraction;
+      const worldZ = worldStart.z + (worldEnd.z - worldStart.z) * fraction;
       const normalLength = Math.max(Math.hypot(worldX, worldY, worldZ), 1e-9);
       const facing = worldX * (cameraPosition.x - worldX) + worldY * (cameraPosition.y - worldY) + worldZ * (cameraPosition.z - worldZ);
       if (facing / normalLength <= 0) continue;
