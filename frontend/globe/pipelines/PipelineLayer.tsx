@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useThree } from "@react-three/fiber";
 import {
   BufferAttribute,
@@ -15,17 +15,14 @@ import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
 import type { Pipeline, PipelineCoordinate, PipelineFuel } from "@/features/pipelines/model";
+import type { HoverKey } from "@/features/map/hover";
 import { DESIGN_COLOR_TOKENS, readDesignColor } from "@/shared/designTokens";
-
-type RouteRange = {
-  readonly id: string;
-  readonly startSegment: number;
-  readonly segmentCount: number;
-};
+import { ScreenSpatialIndex } from "@/globe/interaction/ScreenSpatialIndex";
+import { routeRangeForSegment, type PipelineRouteRange } from "./picking";
 
 type PipelineGeometry = {
   readonly geometry: BufferGeometry;
-  readonly routes: readonly RouteRange[];
+  readonly routes: readonly PipelineRouteRange[];
 };
 
 type PreparedPipeline = {
@@ -38,7 +35,7 @@ const pipelineRadius = 1.008;
 const maxSegmentAngle = Math.PI / 22.5;
 // At the closest camera distance this is about a 1.6-pixel route tolerance.
 const simplificationTolerance = 0.00012;
-const pickRadiusPixels = 5;
+const pickRadiusPixels = 6;
 
 function unitVector([longitude, latitude]: PipelineCoordinate, target: Vector3) {
   const latitudeRadians = (latitude * Math.PI) / 180;
@@ -239,7 +236,7 @@ function createPipelineGeometry(pipelines: readonly Pipeline[]): PipelineGeometr
   const prepared = preparePipelines(pipelines);
   const totalSegments = prepared.reduce((total, item) => total + item.segmentCount, 0);
   const positions = new Float32Array(totalSegments * 6);
-  const routes: RouteRange[] = [];
+  const routes: PipelineRouteRange[] = [];
   let segmentOffset = 0;
   for (const item of prepared) {
     writeRoute(positions, segmentOffset * 6, item.routes);
@@ -251,19 +248,6 @@ function createPipelineGeometry(pipelines: readonly Pipeline[]): PipelineGeometr
   geometry.setAttribute("position", new BufferAttribute(positions, 3));
   geometry.computeBoundingSphere();
   return { geometry, routes };
-}
-
-function findRoute(ranges: readonly RouteRange[], segmentIndex: number) {
-  let low = 0;
-  let high = ranges.length - 1;
-  while (low <= high) {
-    const middle = (low + high) >> 1;
-    const range = ranges[middle];
-    if (segmentIndex < range.startSegment) high = middle - 1;
-    else if (segmentIndex >= range.startSegment + range.segmentCount) low = middle + 1;
-    else return range;
-  }
-  return null;
 }
 
 function createSelectedGeometry(batch: PipelineGeometry | null, selectedId: string | null) {
@@ -278,18 +262,62 @@ function createSelectedGeometry(batch: PipelineGeometry | null, selectedId: stri
   return geometry;
 }
 
-export function PipelineLayer({ pipelines, visible, selectedId, onSelect }: {
+function createHoverGeometry(maxSegments: number) {
+  const geometry = new LineSegmentsGeometry();
+  geometry.setPositions(new Float32Array(Math.max(1, maxSegments) * 6));
+  return geometry;
+}
+
+function updateHoverGeometry(geometry: LineSegmentsGeometry, batch: PipelineGeometry | null, route: PipelineRouteRange | null) {
+  const instanceStart = geometry.getAttribute("instanceStart");
+  const instanceBuffer = "data" in instanceStart ? instanceStart.data : null;
+  if (!instanceBuffer) return;
+  const target = instanceBuffer.array as Float32Array;
+  if (batch && route) {
+    const source = batch.geometry.getAttribute("position").array as Float32Array;
+    const start = route.startSegment * 6;
+    const end = start + route.segmentCount * 6;
+    target.set(source.subarray(start, end), 0);
+    geometry.instanceCount = route.segmentCount;
+  } else {
+    geometry.instanceCount = 0;
+  }
+  instanceBuffer.needsUpdate = true;
+}
+
+function createPipelinePickingCache(batch: PipelineGeometry) {
+  const segmentCount = (batch.geometry.getAttribute("position").count / 2) | 0;
+  return {
+    index: new ScreenSpatialIndex(),
+    startX: new Float32Array(segmentCount),
+    startY: new Float32Array(segmentCount),
+    endX: new Float32Array(segmentCount),
+    endY: new Float32Array(segmentCount),
+  };
+}
+
+export function PipelineLayer({ pipelines, visible, selectedId, hoveredId, onSelect, onHover, onHoverEnd }: {
   readonly pipelines: readonly Pipeline[];
   readonly visible: boolean;
   readonly selectedId: string | null;
+  readonly hoveredId: string | null;
   readonly onSelect: (id: string) => void;
+  readonly onHover: (key: HoverKey, clientX: number, clientY: number, distance: number, event: PointerEvent) => void;
+  readonly onHoverEnd: (key: HoverKey) => void;
 }) {
-  const { camera, invalidate, size } = useThree();
+  const { camera, invalidate, size, pointer } = useThree();
   const gasBatch = useMemo(() => createPipelineGeometry(pipelines.filter((pipeline) => pipeline.fuel === "gas")), [pipelines]);
   const oilBatch = useMemo(() => createPipelineGeometry(pipelines.filter((pipeline) => pipeline.fuel === "oil")), [pipelines]);
   const selectedPipeline = useMemo(() => pipelines.find((pipeline) => pipeline.id === selectedId) ?? null, [pipelines, selectedId]);
+  const hoveredPipeline = useMemo(() => pipelines.find((pipeline) => pipeline.id === hoveredId) ?? null, [pipelines, hoveredId]);
   const selectedBatch = selectedPipeline?.fuel === "gas" ? gasBatch : selectedPipeline?.fuel === "oil" ? oilBatch : null;
+  const hoveredBatch = hoveredPipeline?.fuel === "gas" ? gasBatch : hoveredPipeline?.fuel === "oil" ? oilBatch : null;
   const selectedGeometry = useMemo(() => createSelectedGeometry(selectedBatch, selectedId), [selectedBatch, selectedId]);
+  const maxRouteSegments = Math.max(1,
+    gasBatch.routes.reduce((max, route) => Math.max(max, route.segmentCount), 0),
+    oilBatch.routes.reduce((max, route) => Math.max(max, route.segmentCount), 0),
+  );
+  const hoverGeometry = useMemo(() => createHoverGeometry(maxRouteSegments), [maxRouteSegments]);
   const gasMaterial = useMemo(() => new LineBasicMaterial({ transparent: true, depthTest: true, depthWrite: false, opacity: 0.76 }), []);
   const oilMaterial = useMemo(() => new LineBasicMaterial({ transparent: true, depthTest: true, depthWrite: false, opacity: 0.76 }), []);
   const selectedMaterial = useMemo(() => new LineMaterial({
@@ -303,40 +331,119 @@ export function PipelineLayer({ pipelines, visible, selectedId, onSelect }: {
     () => selectedGeometry ? new LineSegments2(selectedGeometry, selectedMaterial) : null,
     [selectedGeometry, selectedMaterial],
   );
-
-  const raycast = useMemo(() => function raycastPipelineLines(
+  const hoverMaterial = useMemo(() => new LineMaterial({
+    linewidth: 2.1,
+    transparent: true,
+    depthTest: true,
+    depthWrite: false,
+    opacity: 0.96,
+  }), []);
+  const hoverLine = useMemo(() => new LineSegments2(hoverGeometry, hoverMaterial), [hoverGeometry, hoverMaterial]);
+  const gasPicking = useMemo(() => createPipelinePickingCache(gasBatch), [gasBatch]);
+  const oilPicking = useMemo(() => createPipelinePickingCache(oilBatch), [oilBatch]);
+  const worldStart = useMemo(() => new Vector3(), []);
+  const worldEnd = useMemo(() => new Vector3(), []);
+  const projectedStart = useMemo(() => new Vector3(), []);
+  const projectedEnd = useMemo(() => new Vector3(), []);
+  const cameraPosition = useMemo(() => new Vector3(), []);
+  const raycastFor = useCallback((batch: PipelineGeometry, cache: ReturnType<typeof createPipelinePickingCache>) => function raycastPipelineLines(
     this: LineSegments,
-    raycaster: Raycaster,
+    _raycaster: Raycaster,
     intersections: Intersection[],
   ) {
-    const previousThreshold = raycaster.params.Line.threshold;
-    const cameraDepth = Math.max(camera.near, camera.position.length() - pipelineRadius);
-    const zoom = "zoom" in camera ? camera.zoom : 1;
-    const worldHeight = "fov" in camera
-      ? 2 * cameraDepth * Math.tan(camera.fov * Math.PI / 360) / zoom
-      : (camera.top - camera.bottom) / zoom;
-    const candidates: Intersection[] = [];
-    const cameraPosition = new Vector3();
+    camera.updateMatrixWorld();
+    this.updateWorldMatrix(true, false);
+    const snapshot = {
+      width: size.width,
+      height: size.height,
+      cameraWorld: camera.matrixWorld.elements,
+      cameraProjection: camera.projectionMatrix.elements,
+      objectWorld: this.matrixWorld.elements,
+      cameraDistance: camera.position.length(),
+      source: batch.geometry,
+    };
+    const positions = batch.geometry.getAttribute("position").array as Float32Array;
+    if (cache.index.isStale(snapshot)) {
+      cache.index.reset(snapshot);
+      const segmentCount = positions.length / 6;
+      for (let segment = 0; segment < segmentCount; segment += 1) {
+        const offset = segment * 6;
+        worldStart.set(positions[offset], positions[offset + 1], positions[offset + 2]).applyMatrix4(this.matrixWorld);
+        worldEnd.set(positions[offset + 3], positions[offset + 4], positions[offset + 5]).applyMatrix4(this.matrixWorld);
+        projectedStart.copy(worldStart).project(camera);
+        projectedEnd.copy(worldEnd).project(camera);
+        if ((projectedStart.z < -1 && projectedEnd.z < -1) || (projectedStart.z > 1 && projectedEnd.z > 1)) continue;
+        const x1 = (projectedStart.x + 1) * size.width * 0.5;
+        const y1 = (1 - projectedStart.y) * size.height * 0.5;
+        const x2 = (projectedEnd.x + 1) * size.width * 0.5;
+        const y2 = (1 - projectedEnd.y) * size.height * 0.5;
+        cache.startX[segment] = x1;
+        cache.startY[segment] = y1;
+        cache.endX[segment] = x2;
+        cache.endY[segment] = y2;
+        cache.index.insertSegment(x1, y1, x2, y2, segment, pickRadiusPixels);
+      }
+    }
+
+    const pointerX = (pointer.x + 1) * size.width * 0.5;
+    const pointerY = (1 - pointer.y) * size.height * 0.5;
+    const candidates = cache.index.query(pointerX, pointerY, pickRadiusPixels);
+    let bestSegment = -1;
+    let bestDistance = pickRadiusPixels * pickRadiusPixels;
+    let bestWorldX = 0;
+    let bestWorldY = 0;
+    let bestWorldZ = 0;
+    let bestDepth = Infinity;
     camera.getWorldPosition(cameraPosition);
-    try {
-      raycaster.params.Line.threshold = worldHeight / Math.max(size.height, 1) * pickRadiusPixels;
-      LineSegments.prototype.raycast.call(this, raycaster, candidates);
-    } finally {
-      raycaster.params.Line.threshold = previousThreshold;
+    for (const segment of candidates) {
+      const x1 = cache.startX[segment];
+      const y1 = cache.startY[segment];
+      const dx = cache.endX[segment] - x1;
+      const dy = cache.endY[segment] - y1;
+      const lengthSquared = dx * dx + dy * dy;
+      const fraction = lengthSquared === 0 ? 0 : Math.max(0, Math.min(1, ((pointerX - x1) * dx + (pointerY - y1) * dy) / lengthSquared));
+      const closestX = x1 + dx * fraction;
+      const closestY = y1 + dy * fraction;
+      const distance = (closestX - pointerX) ** 2 + (closestY - pointerY) ** 2;
+      if (distance > bestDistance) continue;
+      const offset = segment * 6;
+      worldStart.set(positions[offset], positions[offset + 1], positions[offset + 2]).applyMatrix4(this.matrixWorld);
+      worldEnd.set(positions[offset + 3], positions[offset + 4], positions[offset + 5]).applyMatrix4(this.matrixWorld);
+      const worldX = worldStart.x + (worldEnd.x - worldStart.x) * fraction;
+      const worldY = worldStart.y + (worldEnd.y - worldStart.y) * fraction;
+      const worldZ = worldStart.z + (worldEnd.z - worldStart.z) * fraction;
+      const normalLength = Math.max(Math.hypot(worldX, worldY, worldZ), 1e-9);
+      const facing = worldX * (cameraPosition.x - worldX) + worldY * (cameraPosition.y - worldY) + worldZ * (cameraPosition.z - worldZ);
+      if (facing / normalLength <= 0) continue;
+      const depth = (worldX - cameraPosition.x) ** 2 + (worldY - cameraPosition.y) ** 2 + (worldZ - cameraPosition.z) ** 2;
+      if (distance < bestDistance || (distance === bestDistance && depth < bestDepth)) {
+        bestSegment = segment;
+        bestDistance = distance;
+        bestDepth = depth;
+        bestWorldX = worldX;
+        bestWorldY = worldY;
+        bestWorldZ = worldZ;
+      }
     }
-    for (const candidate of candidates) {
-      const normal = candidate.point.clone().normalize();
-      const towardCamera = cameraPosition.clone().sub(candidate.point).normalize();
-      if (normal.dot(towardCamera) > 0) intersections.push(candidate);
-    }
-  }, [camera, size.height]);
+    if (bestSegment >= 0) intersections.push({
+      distance: Math.sqrt(bestDepth),
+      distanceToRay: Math.sqrt(bestDistance),
+      point: new Vector3(bestWorldX, bestWorldY, bestWorldZ),
+      object: this,
+      index: bestSegment * 2,
+    } as Intersection);
+  }, [camera, cameraPosition, pointer, projectedEnd, projectedStart, size.height, size.width, worldEnd, worldStart]);
+  const gasRaycast = useMemo(() => raycastFor(gasBatch, gasPicking), [gasBatch, gasPicking, raycastFor]);
+  const oilRaycast = useMemo(() => raycastFor(oilBatch, oilPicking), [oilBatch, oilPicking, raycastFor]);
 
   useEffect(() => () => gasBatch.geometry.dispose(), [gasBatch.geometry]);
   useEffect(() => () => oilBatch.geometry.dispose(), [oilBatch.geometry]);
   useEffect(() => () => selectedGeometry?.dispose(), [selectedGeometry]);
+  useEffect(() => () => hoverGeometry.dispose(), [hoverGeometry]);
   useEffect(() => () => gasMaterial.dispose(), [gasMaterial]);
   useEffect(() => () => oilMaterial.dispose(), [oilMaterial]);
   useEffect(() => () => selectedMaterial.dispose(), [selectedMaterial]);
+  useEffect(() => () => hoverMaterial.dispose(), [hoverMaterial]);
   useEffect(() => {
     gasMaterial.color.set(readDesignColor(DESIGN_COLOR_TOKENS.pipelineGas));
     oilMaterial.color.set(readDesignColor(DESIGN_COLOR_TOKENS.pipelineOil));
@@ -346,23 +453,44 @@ export function PipelineLayer({ pipelines, visible, selectedId, onSelect }: {
     if (selectedPipeline) selectedMaterial.color.set(readDesignColor(
       selectedPipeline.fuel === "gas" ? DESIGN_COLOR_TOKENS.pipelineGas : DESIGN_COLOR_TOKENS.pipelineOil,
     ));
+    if (hoveredPipeline) hoverMaterial.color.set(readDesignColor(
+      hoveredPipeline.fuel === "gas" ? DESIGN_COLOR_TOKENS.pipelineGas : DESIGN_COLOR_TOKENS.pipelineOil,
+    ));
     invalidate();
-  }, [gasMaterial, invalidate, oilMaterial, selectedMaterial, selectedPipeline]);
-  useEffect(() => invalidate(), [gasBatch.geometry, invalidate, oilBatch.geometry, selectedGeometry, visible]);
+  }, [gasMaterial, hoverMaterial, hoveredPipeline, invalidate, oilMaterial, selectedMaterial, selectedPipeline]);
+  useEffect(() => invalidate(), [gasBatch.geometry, hoverGeometry, invalidate, oilBatch.geometry, selectedGeometry, visible]);
+  useEffect(() => {
+    const range = hoveredBatch?.routes.find((route) => route.id === hoveredId) ?? null;
+    updateHoverGeometry(hoverGeometry, hoveredBatch, range);
+    invalidate();
+  }, [hoverGeometry, hoveredBatch, hoveredId, invalidate]);
 
   if (!visible || pipelines.length === 0) return null;
 
+  const handleHoverMove = (batch: PipelineGeometry) => (event: { readonly index?: number; readonly distance: number; readonly clientX: number; readonly clientY: number; readonly nativeEvent: PointerEvent; stopPropagation: () => void }) => {
+    if (event.nativeEvent.pointerType === "touch" || event.index === undefined) return;
+    const route = routeRangeForSegment(batch.routes, Math.floor(event.index / 2));
+    if (!route) return;
+    event.stopPropagation();
+    onHover({ type: "pipelines", id: route.id }, event.clientX, event.clientY, event.distance, event.nativeEvent);
+  };
+  const handleHoverOut = (batch: PipelineGeometry) => (event: { readonly index?: number }) => {
+    if (event.index === undefined) return;
+    const route = routeRangeForSegment(batch.routes, Math.floor(event.index / 2));
+    if (route) onHoverEnd({ type: "pipelines", id: route.id });
+  };
   const handleClick = (batch: PipelineGeometry) => (event: { readonly index?: number; readonly delta?: number; stopPropagation: () => void }) => {
     if (event.index === undefined || (event.delta ?? 0) > 5) return;
-    const range = findRoute(batch.routes, Math.floor(event.index / 2));
+    const range = routeRangeForSegment(batch.routes, Math.floor(event.index / 2));
     if (!range) return;
     event.stopPropagation();
     onSelect(range.id);
   };
 
   return <group>
-    {gasBatch.routes.length > 0 ? <lineSegments geometry={gasBatch.geometry} material={gasMaterial} raycast={raycast} onClick={handleClick(gasBatch)} renderOrder={2} /> : null}
-    {oilBatch.routes.length > 0 ? <lineSegments geometry={oilBatch.geometry} material={oilMaterial} raycast={raycast} onClick={handleClick(oilBatch)} renderOrder={2} /> : null}
+    {gasBatch.routes.length > 0 ? <lineSegments geometry={gasBatch.geometry} material={gasMaterial} raycast={gasRaycast} onClick={handleClick(gasBatch)} onPointerMove={handleHoverMove(gasBatch)} onPointerOut={handleHoverOut(gasBatch)} renderOrder={2} /> : null}
+    {oilBatch.routes.length > 0 ? <lineSegments geometry={oilBatch.geometry} material={oilMaterial} raycast={oilRaycast} onClick={handleClick(oilBatch)} onPointerMove={handleHoverMove(oilBatch)} onPointerOut={handleHoverOut(oilBatch)} renderOrder={2} /> : null}
+    {hoveredPipeline && hoveredId !== selectedId ? <primitive object={hoverLine} raycast={() => null} frustumCulled={false} renderOrder={2.5} /> : null}
     {selectedLine ? <primitive object={selectedLine} raycast={() => null} renderOrder={3} /> : null}
   </group>;
 }

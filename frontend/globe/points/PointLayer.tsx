@@ -15,6 +15,8 @@ import {
 import type { GeoEvent } from "@/shared/geoEvent";
 import { geoToVector3 } from "@/globe/geo";
 import { readDesignColor, type DesignColorToken } from "@/shared/designTokens";
+import type { HoverKey } from "@/features/map/hover";
+import { ScreenSpatialIndex } from "@/globe/interaction/ScreenSpatialIndex";
 
 type PointLayerProps<T extends GeoEvent> = {
   readonly entities: readonly T[];
@@ -22,8 +24,12 @@ type PointLayerProps<T extends GeoEvent> = {
   readonly visible: boolean;
   readonly colorToken: DesignColorToken;
   readonly ringed?: boolean;
+  readonly layerType: "earthquakes" | "fires";
+  readonly hoveredId: string | null;
   readonly sizeFor: (entity: T) => number;
   readonly onSelect: (id: string) => void;
+  readonly onHover: (key: HoverKey, clientX: number, clientY: number, distance: number, event: PointerEvent) => void;
+  readonly onHoverEnd: (key: HoverKey) => void;
   readonly onSelectedPositionChange: (position: SelectedPointScreenPosition | null) => void;
 };
 
@@ -35,7 +41,7 @@ export type SelectedPointScreenPosition = {
 };
 
 const markerRadius = 1.012;
-const pointPickRadiusPixels = 3;
+const pointPickRadiusPixels = 6;
 
 function createPointGeometry(points: readonly Vector3[], sizes?: readonly number[]) {
   const geometry = new BufferGeometry();
@@ -105,11 +111,15 @@ export function PointLayer<T extends GeoEvent>({
   visible,
   colorToken,
   ringed = false,
+  layerType,
+  hoveredId,
   sizeFor,
   onSelect,
+  onHover,
+  onHoverEnd,
   onSelectedPositionChange,
 }: PointLayerProps<T>) {
-  const { camera, invalidate, size } = useThree();
+  const { camera, invalidate, size, pointer } = useThree();
   const layer = useRef<Group>(null);
   const positions = useMemo(
     () => entities.map((entity) => geoToVector3([entity.lon, entity.lat], markerRadius)),
@@ -120,40 +130,83 @@ export function PointLayer<T extends GeoEvent>({
     [entities, ringed, sizeFor],
   );
   const geometry = useMemo(() => createPointGeometry(positions, sizes), [positions, sizes]);
+  const picking = useMemo(() => ({
+    index: new ScreenSpatialIndex(),
+    x: new Float32Array(entities.length),
+    y: new Float32Array(entities.length),
+    depth: new Float32Array(entities.length),
+  }), [entities.length]);
+  const worldPoint = useMemo(() => new Vector3(), []);
+  const projectedPoint = useMemo(() => new Vector3(), []);
+  const cameraPositionForPick = useMemo(() => new Vector3(), []);
   const raycast = useMemo(() => function raycastPoints(
     this: Points,
     raycaster: Raycaster,
     intersections: Intersection[],
   ) {
-    const previousThreshold = raycaster.params.Points.threshold;
-    const cameraDepth = Math.max(camera.near, camera.position.length() - markerRadius);
-    const zoom = "zoom" in camera ? camera.zoom : 1;
-    const viewportHeight = Math.max(size.height, 1);
-    const worldHeight = "fov" in camera
-      ? 2 * cameraDepth * Math.tan(camera.fov * Math.PI / 360) / zoom
-      : (camera.top - camera.bottom) / zoom;
-    const candidates: Intersection[] = [];
-    try {
-      raycaster.params.Points.threshold = worldHeight / viewportHeight * pointPickRadiusPixels;
-      Points.prototype.raycast.call(this, raycaster, candidates);
-    } finally {
-      raycaster.params.Points.threshold = previousThreshold;
+    camera.updateMatrixWorld();
+    this.updateWorldMatrix(true, false);
+    const snapshot = {
+      width: size.width,
+      height: size.height,
+      cameraWorld: camera.matrixWorld.elements,
+      cameraProjection: camera.projectionMatrix.elements,
+      objectWorld: this.matrixWorld.elements,
+      cameraDistance: camera.position.length(),
+      source: positions,
+    };
+    if (picking.index.isStale(snapshot)) {
+      picking.index.reset(snapshot);
+      camera.getWorldPosition(cameraPositionForPick);
+      for (let index = 0; index < positions.length; index += 1) {
+        worldPoint.copy(positions[index]).applyMatrix4(this.matrixWorld);
+        const towardCameraX = cameraPositionForPick.x - worldPoint.x;
+        const towardCameraY = cameraPositionForPick.y - worldPoint.y;
+        const towardCameraZ = cameraPositionForPick.z - worldPoint.z;
+        const normalLength = Math.max(worldPoint.length(), 1e-9);
+        if ((worldPoint.x * towardCameraX + worldPoint.y * towardCameraY + worldPoint.z * towardCameraZ) / normalLength <= 0) continue;
+        projectedPoint.copy(worldPoint).project(camera);
+        if (projectedPoint.z < -1 || projectedPoint.z > 1) continue;
+        const x = (projectedPoint.x + 1) * size.width * 0.5;
+        const y = (1 - projectedPoint.y) * size.height * 0.5;
+        picking.x[index] = x;
+        picking.y[index] = y;
+        picking.depth[index] = worldPoint.distanceToSquared(cameraPositionForPick);
+        picking.index.insertPoint(x, y, index);
+      }
     }
 
-    const cameraPosition = raycaster.ray.origin;
-    const visibleCandidates = candidates.filter((candidate) =>
-      candidate.point.clone().normalize().dot(cameraPosition.clone().sub(candidate.point)) > 0,
-    );
-    visibleCandidates.sort(
-      (left, right) => (left.distanceToRay ?? Infinity) - (right.distanceToRay ?? Infinity),
-    );
-    if (visibleCandidates[0]) intersections.push(visibleCandidates[0]);
-  }, [camera, size.height]);
+    const pointerX = (pointer.x + 1) * size.width * 0.5;
+    const pointerY = (1 - pointer.y) * size.height * 0.5;
+    const candidates = picking.index.query(pointerX, pointerY, pointPickRadiusPixels);
+    let bestIndex = -1;
+    let bestDistance = pointPickRadiusPixels * pointPickRadiusPixels;
+    let bestDepth = Infinity;
+    for (const index of candidates) {
+      const distance = (picking.x[index] - pointerX) ** 2 + (picking.y[index] - pointerY) ** 2;
+      if (distance < bestDistance || (distance === bestDistance && picking.depth[index] < bestDepth)) {
+        bestIndex = index;
+        bestDistance = distance;
+        bestDepth = picking.depth[index];
+      }
+    }
+    if (bestIndex >= 0) {
+      intersections.push({
+        distance: Math.sqrt(bestDepth),
+        distanceToRay: Math.sqrt(bestDistance),
+        point: worldPoint.copy(positions[bestIndex]).applyMatrix4(this.matrixWorld).clone(),
+        object: this,
+        index: bestIndex,
+      } as Intersection);
+    }
+  }, [camera, cameraPositionForPick, picking, pointer, positions, projectedPoint, size.height, size.width, worldPoint]);
   const selectedIndex = entities.findIndex((entity) => entity.id === selectedId);
+  const hoveredIndex = entities.findIndex((entity) => entity.id === hoveredId);
   const selectedGeometry = useMemo(
     () => selectedIndex < 0 ? null : createPointGeometry([positions[selectedIndex]], [sizes[selectedIndex]]),
     [positions, selectedIndex, sizes],
   );
+  const hoverGeometry = useMemo(() => createPointGeometry([new Vector3()], [1]), []);
   const markerMaterial = useMemo(
     () => {
       const material = new PointsMaterial({
@@ -215,17 +268,51 @@ export function PointLayer<T extends GeoEvent>({
     },
     [ringed],
   );
+  const hoverMaterial = useMemo(() => {
+    const material = new PointsMaterial({
+      depthWrite: false,
+      size: ringed ? 8.1 : 4.8,
+      sizeAttenuation: false,
+      transparent: true,
+      opacity: 0.96,
+    });
+    material.onBeforeCompile = (shader) => {
+      shader.vertexShader = shader.vertexShader
+        .replace("#include <common>", "#include <common>\nattribute float markerSize;")
+        .replace("gl_PointSize = size;", "gl_PointSize = markerSize * size;");
+      const markerShape = ringed
+        ? `float radius = length(gl_PointCoord - vec2(0.5)) * 2.0; if (radius > 1.0) discard; float center = 1.0 - smoothstep(0.28, 0.34, radius); float outerRing = 1.0 - smoothstep(0.065, 0.11, abs(radius - 0.72)); diffuseColor.a *= max(center, outerRing);`
+        : "if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard;";
+      shader.fragmentShader = shader.fragmentShader.replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>\n${markerShape}`);
+    };
+    material.customProgramCacheKey = () => `earthview-hover-data-points-v1-${ringed}`;
+    return material;
+  }, [ringed]);
 
   useEffect(() => () => geometry.dispose(), [geometry]);
   useEffect(() => () => selectedGeometry?.dispose(), [selectedGeometry]);
+  useEffect(() => () => hoverGeometry.dispose(), [hoverGeometry]);
   useEffect(() => () => markerMaterial.dispose(), [markerMaterial]);
   useEffect(() => () => selectedMaterial.dispose(), [selectedMaterial]);
+  useEffect(() => () => hoverMaterial.dispose(), [hoverMaterial]);
   useEffect(() => {
     const color = readDesignColor(colorToken);
     markerMaterial.color.set(color);
     selectedMaterial.color.set(color);
+    hoverMaterial.color.set(color);
     invalidate();
-  }, [colorToken, invalidate, markerMaterial, selectedMaterial]);
+  }, [colorToken, hoverMaterial, invalidate, markerMaterial, selectedMaterial]);
+  useEffect(() => {
+    if (hoveredIndex < 0) return;
+    const point = positions[hoveredIndex];
+    const position = hoverGeometry.getAttribute("position") as Float32BufferAttribute;
+    const markerSize = hoverGeometry.getAttribute("markerSize") as Float32BufferAttribute;
+    position.setXYZ(0, point.x, point.y, point.z);
+    markerSize.setX(0, sizes[hoveredIndex]);
+    position.needsUpdate = true;
+    markerSize.needsUpdate = true;
+    invalidate();
+  }, [hoverGeometry, hoveredIndex, invalidate, positions, sizes]);
   useEffect(() => {
     invalidate();
   }, [geometry, invalidate, selectedGeometry, visible]);
@@ -235,11 +322,18 @@ export function PointLayer<T extends GeoEvent>({
 
   if (!visible) return null;
 
-  const handleClick = (event: ThreeEvent<MouseEvent>) => {
+  const handleClick = (event: ThreeEvent<MouseEvent> & { readonly delta?: number }) => {
+    if ((event.delta ?? 0) > 5) return;
     if (event.index === undefined) return;
     event.stopPropagation();
     onSelect(entities[event.index].id);
   };
+  const handlePointerMove = (event: ThreeEvent<PointerEvent>) => {
+    if (event.nativeEvent.pointerType === "touch" || event.index === undefined) return;
+    event.stopPropagation();
+    onHover({ type: layerType, id: entities[event.index].id }, event.clientX, event.clientY, event.distance, event.nativeEvent);
+  };
+  const hoverKey = (id: string): HoverKey => ({ type: layerType, id });
 
   return (
     <group ref={layer}>
@@ -248,8 +342,13 @@ export function PointLayer<T extends GeoEvent>({
         material={markerMaterial}
         raycast={raycast}
         onClick={handleClick}
+        onPointerMove={handlePointerMove}
+        onPointerOut={(event) => {
+          if (event.index !== undefined) onHoverEnd(hoverKey(entities[event.index].id));
+        }}
         renderOrder={2}
       />
+      {hoveredIndex >= 0 && hoveredId !== selectedId ? <points geometry={hoverGeometry} material={hoverMaterial} raycast={() => null} frustumCulled={false} renderOrder={2.5} /> : null}
       {selectedGeometry ? <points geometry={selectedGeometry} material={selectedMaterial} raycast={() => null} renderOrder={3} /> : null}
       {selectedGeometry ? (
         <SelectedPointProjection

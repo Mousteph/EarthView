@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { EarthViewHeader } from "@/shared/ui/EarthViewHeader";
 import { LayerControls, type LayerControl } from "./LayerControls";
 import { resolveSelection, type SelectedEvent, type SelectionData } from "./selection";
+import type { HoverData } from "./hover";
+import { useGlobeHover } from "./useGlobeHover";
 import { useMapState } from "./useMapState";
 import { useMapLayers } from "./useMapLayers";
 import { GlobeScene, type MapScale } from "@/globe/GlobeScene";
@@ -12,9 +14,11 @@ import type { OrbitalMode, SelectedSatellitePosition } from "@/features/orbital/
 import type { PipelineFuel } from "@/features/pipelines/model";
 import { filterPipelines, reconcilePipelineStatusFilters as reconcilePipelineStatusFilterValues } from "@/features/pipelines/filters";
 import { orbitalVisibilityMask } from "@/features/orbital/filters";
+import { orbitalObjectColor } from "@/features/orbital/colors";
 
 export function MapView() {
   const [hasInteracted, setHasInteracted] = useState(false);
+  const markInteracted = useCallback(() => setHasInteracted(true), []);
   const { earthquakesVisible, firesVisible, enabledOrbitalModes, enabledPipelineFuels, pipelineStatusFilters, orbitalFilters, selection,
     toggleEarthquakes: toggleEarthquakesState, toggleFires: toggleFiresState, toggleOrbitalMode,
     togglePipelineFuel: togglePipelineFuelState, changePipelineStatusFilters, reconcilePipelineStatusFilters: reconcilePipelineStatusFilterState,
@@ -54,6 +58,16 @@ export function MapView() {
     pipelines, enabledPipelineFuels,
   }), [earthquakes, fires, orbitalObjects, visibleMask, earthquakesVisible, firesVisible, enabledOrbitalModes, selectedSatellitePosition, pipelines, enabledPipelineFuels]);
   const selected: SelectedEvent | null = resolveSelection(selection, selectionData);
+  const hoverData: HoverData = useMemo(() => ({
+    earthquakes, fires, orbitalObjects, orbitalVisibility: visibleMask, earthquakesVisible, firesVisible,
+    satellitesVisible, pipelines, pipelinesVisible: enabledPipelineFuels.length > 0,
+    orbitalColorFor: orbitalObjectColor,
+  }), [earthquakes, fires, orbitalObjects, visibleMask, earthquakesVisible, firesVisible, satellitesVisible, pipelines, enabledPipelineFuels]);
+  const {
+    hoverTooltip, hovered, globeCanvasRef, hoverTooltipRef,
+    handleHover, handleHoverEnd, clearHover, handlePointerEnter, handlePointerDown, handlePointerMove,
+    handlePointerUp, handlePointerCancel,
+  } = useGlobeHover(hoverData, markInteracted);
   useEffect(() => {
     if (!selection || selected) return;
     const timeout = window.setTimeout(() => reconcileSelection(selectionData));
@@ -165,11 +179,14 @@ export function MapView() {
     <main
       aria-label="Interactive Earth globe"
       className="earthview"
-      onPointerDown={() => setHasInteracted(true)}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
       onWheel={() => setHasInteracted(true)}
     >
       <div className="stage-title stage-title-left" aria-hidden="true">View<span>.</span></div>
-      <div className="globe-canvas">
+      <div className="globe-canvas" ref={globeCanvasRef} onPointerEnter={handlePointerEnter} onPointerLeave={clearHover}>
         <GlobeScene
           autoRotate={!hasInteracted}
           earthquakes={earthquakes}
@@ -192,12 +209,25 @@ export function MapView() {
           onFireSelect={handleFireSelect}
           onSelectedPositionChange={updateSelectedConnector}
           onScaleChange={handleScaleChange}
+          hovered={hovered}
+          onHover={handleHover}
+          onHoverEnd={handleHoverEnd}
         />
       </div>
       <svg className="event-connector" ref={connectorRef} aria-hidden="true">
         <path ref={connectorPathRef} />
         <circle ref={connectorRingRef} r="13" />
       </svg>
+      {hoverTooltip ? <div
+        className="globe-hover-tooltip"
+        ref={hoverTooltipRef}
+        style={{ "--hover-accent": hoverTooltip.accent } as CSSProperties}
+        aria-hidden="true"
+      >
+        <span className="globe-hover-label">{hoverTooltip.label}</span>
+        <span className="globe-hover-title">{hoverTooltip.title}</span>
+        {hoverTooltip.detail ? <span className="globe-hover-detail">{hoverTooltip.detail}</span> : null}
+      </div> : null}
       <EarthViewHeader />
       <LayerControls layers={layers} selected={selected} detailsRef={detailsRef} onClose={clearSelection} summaryItems={orbitalSummaryItems}
         orbitalControls={{ enabledModes: enabledOrbitalModes, onModeToggle: handleOrbitalModeToggle, filters: filterOptions,
