@@ -38,6 +38,12 @@ export type OrbitalMode = "active" | "debris" | "rocket_bodies";
 
 export type OrbitalObject = Satellite & { readonly orbitalMode: OrbitalMode };
 
+export const ISS_NORAD_ID = 25544;
+
+export function isInternationalSpaceStation(satellite: Pick<Satellite, "noradId">): boolean {
+  return satellite.noradId === ISS_NORAD_ID;
+}
+
 export type SatellitesResponse = {
   readonly category: "active";
   readonly mode: OrbitalMode;

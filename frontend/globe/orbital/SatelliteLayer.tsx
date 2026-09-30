@@ -13,7 +13,7 @@ import {
   Vector3,
   type Group,
 } from "three";
-import type { OrbitalObject, SelectedSatellitePosition } from "@/features/orbital/model";
+import { isInternationalSpaceStation, type OrbitalObject, type SelectedSatellitePosition } from "@/features/orbital/model";
 import { recordSatelliteWorkerCalculation, recordSatelliteWorkerCreated, recordSatelliteWorkerInitialization } from "@/features/orbital/performance";
 import { DESIGN_COLOR_TOKENS, readDesignColor } from "@/shared/designTokens";
 import { segmentHiddenByEarth, snapshotAlpha } from "./satelliteMath";
@@ -63,8 +63,8 @@ function createGeometry(count: number) {
   return geometry;
 }
 
-function createMaterial(size: number, selected: boolean) {
-  const material = new PointsMaterial({ size, sizeAttenuation: false, depthTest: true, depthWrite: false, transparent: true, opacity: selected ? 0.82 : 0.83, vertexColors: !selected });
+function createMaterial(size: number, selected: boolean, stationGlyph = false) {
+  const material = new PointsMaterial({ size, sizeAttenuation: false, depthTest: true, depthWrite: false, transparent: true, opacity: selected ? 0.82 : 0.83, vertexColors: !selected && !stationGlyph });
   material.userData.interpolationAlpha = { value: 0 };
   material.onBeforeCompile = (shader) => {
     shader.uniforms.interpolationAlpha = material.userData.interpolationAlpha;
@@ -78,9 +78,18 @@ function createMaterial(size: number, selected: boolean) {
       .replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>
         if (satelliteValid < 0.5) discard;
         float radius = length(gl_PointCoord - vec2(0.5));
-        ${selected ? "if (radius > 0.5 || (radius < 0.29 && radius > 0.17)) discard;" : "if (radius > 0.5) discard;"}`);
+        ${stationGlyph ? `
+        vec2 station = gl_PointCoord - vec2(0.5);
+        float bus = step(abs(station.x), 0.075) * step(abs(station.y), 0.15);
+        float truss = step(abs(station.x), 0.36) * step(abs(station.y), 0.035);
+        float panels = (step(-0.44, station.x) * step(station.x, -0.15) + step(0.15, station.x) * step(station.x, 0.44)) * step(abs(station.y), 0.18);
+        float glyph = max(max(bus, truss), panels);
+        if (satelliteValid < 0.5 || glyph < 0.5) discard;
+        float panelGrid = max(1.0 - step(0.018, abs(abs(station.x) - 0.295)), 1.0 - step(0.015, abs(station.y)));
+        if (panels > 0.5 && panelGrid > 0.5 && bus < 0.5 && truss < 0.5) discard;`
+          : selected ? "if (radius > 0.5 || (radius < 0.29 && radius > 0.17)) discard;" : "if (radius > 0.5) discard;"}`);
   };
-  material.customProgramCacheKey = () => `earthview-satellite-${selected ? "selected" : "points"}-v1`;
+  material.customProgramCacheKey = () => `earthview-satellite-${stationGlyph ? "iss" : selected ? "selected" : "points"}-v1`;
   return material;
 }
 
@@ -110,6 +119,7 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
   const markerMaterialRef = useRef<PointsMaterial | null>(null);
   const highlightMaterialRef = useRef<PointsMaterial | null>(null);
   const hoverMaterialRef = useRef<PointsMaterial | null>(null);
+  const issMaterialRef = useRef<PointsMaterial | null>(null);
   const projected = useMemo(() => new Vector3(), []);
   const cameraPosition = useMemo(() => new Vector3(), []);
   const geometry = useMemo(() => createGeometry(satellites.length), [satellites]);
@@ -124,13 +134,16 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
   })), [satellites]);
   const selectedGeometry = useMemo(() => createGeometry(1), []);
   const hoverGeometry = useMemo(() => createGeometry(1), []);
+  const issGeometry = useMemo(() => createGeometry(1), []);
   const material = useMemo(() => createMaterial(3.4, false), []);
   const selectedMaterial = useMemo(() => createMaterial(12, true), []);
   const hoverMaterial = useMemo(() => createMaterial(9, true), []);
+  const issMaterial = useMemo(() => createMaterial(23, false, true), []);
   const pathMaterial = useMemo(() => new MeshBasicMaterial({ transparent: true, opacity: 0.82, depthTest: true, depthWrite: false }), []);
   const [path, setPath] = useState<{ id: string; positions: Float32Array } | null>(null);
   const selectedIndex = useMemo(() => satellites.findIndex((satellite) => satellite.id === selectedId), [satellites, selectedId]);
   const hoveredIndex = useMemo(() => satellites.findIndex((satellite) => satellite.id === hoveredId), [satellites, hoveredId]);
+  const issIndex = useMemo(() => satellites.findIndex(isInternationalSpaceStation), [satellites]);
   const pathGeometry = useMemo(() => path && path.id === selectedId ? (() => {
     const points = Array.from({ length: path.positions.length / 3 }, (_, index) => new Vector3(
       path.positions[index * 3], path.positions[index * 3 + 1], path.positions[index * 3 + 2],
@@ -150,6 +163,12 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
   useEffect(() => { markerMaterialRef.current = material; }, [material]);
   useEffect(() => { highlightMaterialRef.current = selectedMaterial; }, [selectedMaterial]);
   useEffect(() => { hoverMaterialRef.current = hoverMaterial; }, [hoverMaterial]);
+  useEffect(() => { issMaterialRef.current = issMaterial; }, [issMaterial]);
+  useEffect(() => {
+    const iss = issIndex >= 0 ? satellites[issIndex] : null;
+    issMaterial.color.copy(iss ? colorForObject(iss) : new Color(readDesignColor(DESIGN_COLOR_TOKENS.satellite)));
+    invalidate();
+  }, [invalidate, issIndex, issMaterial, satellites]);
   useEffect(() => {
     const colors = geometry.getAttribute("color") as BufferAttribute;
     const values = colors.array as Float32Array;
@@ -179,12 +198,21 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
     invalidate();
   }, [geometry, invalidate, satellites, visibility]);
 
+  useEffect(() => {
+    const attribute = issGeometry.getAttribute("filterVisible") as BufferAttribute;
+    (attribute.array as Float32Array)[0] = issIndex >= 0 ? visibility?.[issIndex] ?? 1 : 0;
+    attribute.needsUpdate = true;
+    invalidate();
+  }, [invalidate, issGeometry, issIndex, visibility]);
+
   useEffect(() => () => geometry.dispose(), [geometry]);
   useEffect(() => () => selectedGeometry.dispose(), [selectedGeometry]);
   useEffect(() => () => hoverGeometry.dispose(), [hoverGeometry]);
+  useEffect(() => () => issGeometry.dispose(), [issGeometry]);
   useEffect(() => () => material.dispose(), [material]);
   useEffect(() => () => selectedMaterial.dispose(), [selectedMaterial]);
   useEffect(() => () => hoverMaterial.dispose(), [hoverMaterial]);
+  useEffect(() => () => issMaterial.dispose(), [issMaterial]);
   useEffect(() => () => pathMaterial.dispose(), [pathMaterial]);
   useEffect(() => () => pathGeometry?.dispose(), [pathGeometry]);
 
@@ -200,6 +228,10 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
         if (!first) return;
         snapshot.current = { first, second: message.second, startMs: message.startMs, endMs: message.endMs };
         setGeometryPositions(geometry, first, message.second);
+        if (issIndex >= 0) {
+          const offset = issIndex * 3;
+          setGeometryPositions(issGeometry, first.subarray(offset, offset + 3), message.second.subarray(offset, offset + 3));
+        }
         const index = selectedIndexRef.current;
         if (index >= 0) {
           const offset = index * 3;
@@ -230,7 +262,7 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
       onDataRef.current(null);
       onScreenRef.current(null);
     };
-  }, [geometry, hoverGeometry, invalidate, orbitElements, satellites.length, selectedGeometry]);
+  }, [geometry, hoverGeometry, invalidate, issGeometry, issIndex, orbitElements, satellites.length, selectedGeometry]);
 
   useEffect(() => {
     worker.current?.postMessage({ type: "select", id: selectedId } satisfies SatelliteWorkerInput);
@@ -400,6 +432,7 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
     if (markerMaterialRef.current) markerMaterialRef.current.userData.interpolationAlpha.value = blend;
     if (highlightMaterialRef.current) highlightMaterialRef.current.userData.interpolationAlpha.value = blend;
     if (hoverMaterialRef.current) hoverMaterialRef.current.userData.interpolationAlpha.value = blend;
+    if (issMaterialRef.current) issMaterialRef.current.userData.interpolationAlpha.value = blend;
     if (!selectedIdRef.current || !group.current) return;
     const index = selectedIndexRef.current;
     if (index < 0) return;
@@ -435,6 +468,7 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
 
   return <group ref={group}>
     <points geometry={geometry} material={material} frustumCulled={false} raycast={() => null} renderOrder={2} />
+    {issIndex >= 0 ? <points geometry={issGeometry} material={issMaterial} frustumCulled={false} raycast={() => null} renderOrder={2.2} /> : null}
     {hoveredId && hoveredId !== selectedId ? <points geometry={hoverGeometry} material={hoverMaterial} frustumCulled={false} raycast={() => null} renderOrder={2.5} /> : null}
     {selectedId ? <points geometry={selectedGeometry} material={selectedMaterial} frustumCulled={false} raycast={() => null} renderOrder={4} /> : null}
     {selectedId && pathGeometry ? <mesh geometry={pathGeometry} material={pathMaterial} frustumCulled={false} raycast={() => null} renderOrder={3} /> : null}
