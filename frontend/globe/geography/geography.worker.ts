@@ -1,7 +1,6 @@
 import {
   prepareGeography,
   type FeatureCollection,
-  type GeographySources,
 } from "./geographyPreparation";
 
 type GeographyAssetPaths = {

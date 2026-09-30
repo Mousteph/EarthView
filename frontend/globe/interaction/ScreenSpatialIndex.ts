@@ -116,7 +116,7 @@ export class ScreenSpatialIndex {
 }
 
 export function matrixChanged(matrix: ArrayLike<number>, previous: Float64Array | null, tolerance = 0.001) {
-  if (!previous || previous.length !== matrix.length) return true;
+  if (previous?.length !== matrix.length) return true;
   for (let index = 0; index < matrix.length; index += 1) {
     if (Math.abs(matrix[index] - previous[index]) > tolerance) return true;
   }

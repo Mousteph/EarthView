@@ -33,7 +33,8 @@ export function LayerRow({ layer, expanded, onDisclosure, children }: {
     <div className="layer-actions">
       <button className={`layer-toggle layer-toggle-${layer.id}`} type="button" onClick={handleToggle}
         aria-label={isDisclosure ? `${expanded ? "Collapse" : "Expand"} ${layer.label} options` : `${layer.visible ? "Hide" : "Show"} ${layer.label} layer`}
-        aria-pressed={layer.visible} aria-expanded={isDisclosure ? expanded : undefined}>
+        aria-pressed={isDisclosure ? undefined : layer.visible} aria-expanded={isDisclosure ? expanded : undefined}
+        data-visible={layer.visible} data-tooltip={layer.label}>
         <span className="layer-toggle-circle" aria-hidden="true" />
         <span className="layer-copy"><strong>{layer.label}{layer.visible && layer.hasLoaded ? <> <output className="layer-heading-count">– {formatCount(layer.count)}</output></> : null}</strong><span>{layer.description}</span></span>
       </button>
