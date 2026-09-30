@@ -30,9 +30,9 @@
 
 .layer-toggle-pipelines { --layer-color: var(--color-pipeline-gas); }
 
-.layer-toggle-circle { position: absolute; top: 50%; left: 0; display: grid; flex: none; place-items: center; width: var(--layer-control-marker-size); height: var(--layer-control-marker-size); box-sizing: border-box; border: 1px solid var(--layer-color); border-radius: 50%; background: transparent; transform: translateY(-50%); }
+.layer-toggle-circle { position: absolute; top: 50%; left: 0; display: grid; flex: none; place-items: center; width: var(--layer-control-marker-size); height: var(--layer-control-marker-size); box-sizing: border-box; border: 1.5px solid var(--layer-color); border-radius: 50%; background: transparent; transform: translateY(-50%); }
 
-.layer-toggle-circle::after { width: 15px; height: 15px; border-radius: 50%; background: transparent; content: ""; }
+.layer-toggle-circle::after { width: 16px; height: 16px; border-radius: 50%; background: transparent; content: ""; }
 
 .layer-toggle[data-visible="true"] .layer-toggle-circle::after { background: var(--layer-color); }
 
@@ -93,7 +93,7 @@
 
 .pipeline-choice[aria-pressed="true"] { color: var(--color-orbital-label-active); }
 
-.pipeline-marker { width: 9px; height: 9px; flex: none; border-radius: 50%; background: transparent; box-shadow: inset 0 0 0 1.5px var(--pipeline-color); }
+.pipeline-marker { width: 10px; height: 10px; flex: none; border-radius: 50%; background: transparent; box-shadow: inset 0 0 0 2px var(--pipeline-color); }
 
 .pipeline-choice[aria-pressed="true"] .pipeline-marker { background: var(--pipeline-color); }
 
@@ -125,7 +125,7 @@
 
 .orbital-category-choice[aria-pressed="true"] { color: var(--color-orbital-label-active); }
 
-.orbital-category-marker { width: 9px; height: 9px; flex: none; border-radius: 50%; background: transparent; box-shadow: inset 0 0 0 1.5px var(--orbital-color); }
+.orbital-category-marker { width: 10px; height: 10px; flex: none; border-radius: 50%; background: transparent; box-shadow: inset 0 0 0 2px var(--orbital-color); }
 
 .orbital-category-choice[aria-pressed="true"] .orbital-category-marker { background: var(--orbital-color); }
 
@@ -281,7 +281,7 @@
   .pipeline-options { margin-left: calc(34px + var(--layer-control-marker-inset)); }
   .orbital-filter-groups { max-height: 170px; }
   .event-details { top: auto; right: 20px; bottom: 175px; width: min(255px, calc(100vw - 40px)); }
-  .inspection-prompt { top: 295px; right: 20px; width: min(42vw, 190px); }
+  .inspection-prompt { z-index: 2; top: 430px; right: 20px; width: min(190px, calc(100vw - 40px)); border-radius: 10px; padding: 11px 12px; background: var(--color-panel); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
   .inspection-prompt h2 { font-size: clamp(16px, 4.5vw, 20px); }
   .inspection-prompt p { margin-top: 9px; font-size: 11px; }
   .inspection-prompt .inspection-scale-note { margin-top: 7px; font-size: 9px; }

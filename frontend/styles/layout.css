@@ -99,6 +99,6 @@ a { color: inherit; }
   .utc-clock, .live-status { font-size: 9px; }
   .live-dot { width: 6px; height: 6px; }
   .stage-nav { gap: 16px; font-size: 10px; }
-  .stage-title { bottom: 25px; left: 20px; font-size: clamp(56px, 17vw, 76px); }
-  .map-scale { right: 72px; bottom: 33px; font-size: 9px; }
+  .stage-title { bottom: 78px; left: 20px; font-size: clamp(56px, 17vw, 76px); }
+  .map-scale { right: 20px; bottom: 24px; font-size: 9px; }
 }
