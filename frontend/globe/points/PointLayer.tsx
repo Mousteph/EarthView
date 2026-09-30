@@ -44,13 +44,72 @@ export type SelectedPointScreenPosition = {
 const markerRadius = 1.012;
 const pointPickRadiusPixels = 6;
 
-function createPointGeometry(points: readonly Vector3[], sizes?: readonly number[]) {
+function createPointGeometry(
+  points: readonly Vector3[],
+  sizes: readonly number[],
+  opacities: readonly number[] = points.map(() => 1),
+) {
   const geometry = new BufferGeometry();
   geometry.setFromPoints([...points]);
-  geometry.setAttribute("markerSize", new Float32BufferAttribute(sizes ?? points.map(() => 1), 1));
-  geometry.setAttribute("markerOpacity", new Float32BufferAttribute(points.map(() => 1), 1));
+  geometry.setAttribute("markerSize", new Float32BufferAttribute(sizes, 1));
+  geometry.setAttribute("markerOpacity", new Float32BufferAttribute(opacities, 1));
   geometry.computeBoundingSphere();
   return geometry;
+}
+
+type PointMaterialOptions = {
+  readonly size: number;
+  readonly opacity?: number;
+  readonly ringed: boolean;
+  readonly selected?: boolean;
+  readonly cacheKey: string;
+};
+
+function createPointMaterial({
+  size,
+  opacity = 1,
+  ringed,
+  selected = false,
+  cacheKey,
+}: PointMaterialOptions) {
+  const material = new PointsMaterial({
+    depthWrite: false,
+    size,
+    sizeAttenuation: false,
+    transparent: true,
+    opacity,
+  });
+  const markerShape = ringed
+    ? `
+      float radius = length(gl_PointCoord - vec2(0.5)) * 2.0;
+      if (radius > 1.0) discard;
+      float center = 1.0 - smoothstep(0.28, 0.34, radius);
+      float outerRing = 1.0 - smoothstep(${selected ? "0.07, 0.12" : "0.065, 0.11"}, abs(radius - 0.72));
+      diffuseColor.a *= max(center, outerRing);`
+    : "if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard;";
+
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nattribute float markerSize;\nattribute float markerOpacity;\nvarying float vMarkerOpacity;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvMarkerOpacity = markerOpacity;")
+      .replace("gl_PointSize = size;", "gl_PointSize = markerSize * size;");
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <clipping_planes_fragment>",
+      `#include <clipping_planes_fragment>\ndiffuseColor.a *= vMarkerOpacity;\n${markerShape}`,
+    );
+    if (selected) {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        "#include <color_fragment>",
+        "#include <color_fragment>\ndiffuseColor.rgb = min(diffuseColor.rgb * 1.35, vec3(1.0));",
+      );
+    }
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "#include <common>",
+      "#include <common>\nvarying float vMarkerOpacity;",
+    );
+  };
+  material.customProgramCacheKey = () => `${cacheKey}-${ringed}`;
+  return material;
 }
 
 function SelectedPointProjection({
@@ -137,9 +196,7 @@ export function PointLayer<T extends GeoEvent>({
     [entities, opacityFor],
   );
   const geometry = useMemo(() => {
-    const pointGeometry = createPointGeometry(positions, sizes);
-    if (opacities) pointGeometry.setAttribute("markerOpacity", new Float32BufferAttribute(opacities, 1));
-    return pointGeometry;
+    return createPointGeometry(positions, sizes, opacities ?? undefined);
   }, [opacities, positions, sizes]);
   const picking = useMemo(() => ({
     index: new ScreenSpatialIndex(),
@@ -218,93 +275,24 @@ export function PointLayer<T extends GeoEvent>({
     [positions, selectedIndex, sizes],
   );
   const hoverGeometry = useMemo(() => createPointGeometry([new Vector3()], [1]), []);
-  const markerMaterial = useMemo(
-    () => {
-      const material = new PointsMaterial({
-        depthWrite: false,
-        size: ringed ? 6.8 : 4.2,
-        sizeAttenuation: false,
-        transparent: true,
-        opacity: opacityFor ? 1 : 0.9,
-      });
-      material.onBeforeCompile = (shader) => {
-        shader.vertexShader = shader.vertexShader
-          .replace("#include <common>", "#include <common>\nattribute float markerSize;\nattribute float markerOpacity;\nvarying float vMarkerOpacity;")
-          .replace("#include <begin_vertex>", "#include <begin_vertex>\nvMarkerOpacity = markerOpacity;")
-          .replace("gl_PointSize = size;", "gl_PointSize = markerSize * size;");
-        const markerShape = ringed
-          ? `
-            float radius = length(gl_PointCoord - vec2(0.5)) * 2.0;
-            if (radius > 1.0) discard;
-            float center = 1.0 - smoothstep(0.28, 0.34, radius);
-            float outerRing = 1.0 - smoothstep(0.065, 0.11, abs(radius - 0.72));
-            diffuseColor.a *= max(center, outerRing);`
-          : "if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard;";
-        shader.fragmentShader = shader.fragmentShader.replace(
-          "#include <clipping_planes_fragment>",
-          `#include <clipping_planes_fragment>\ndiffuseColor.a *= vMarkerOpacity;\n${markerShape}`,
-        );
-        shader.fragmentShader = shader.fragmentShader.replace("#include <common>", "#include <common>\nvarying float vMarkerOpacity;");
-      };
-      material.customProgramCacheKey = () => `earthview-data-points-v4-${ringed}`;
-      return material;
-    },
-    [opacityFor, ringed],
-  );
-  const selectedMaterial = useMemo(
-    () => {
-      const material = new PointsMaterial({
-        depthWrite: false,
-        size: ringed ? 9.5 : 6.5,
-        sizeAttenuation: false,
-        transparent: true,
-      });
-      material.onBeforeCompile = (shader) => {
-        shader.vertexShader = shader.vertexShader
-          .replace("#include <common>", "#include <common>\nattribute float markerSize;\nattribute float markerOpacity;\nvarying float vMarkerOpacity;")
-          .replace("#include <begin_vertex>", "#include <begin_vertex>\nvMarkerOpacity = markerOpacity;")
-          .replace("gl_PointSize = size;", "gl_PointSize = markerSize * size;");
-        const markerShape = ringed
-          ? `
-            float radius = length(gl_PointCoord - vec2(0.5)) * 2.0;
-            if (radius > 1.0) discard;
-            float center = 1.0 - smoothstep(0.28, 0.34, radius);
-            float outerRing = 1.0 - smoothstep(0.07, 0.12, abs(radius - 0.72));
-            diffuseColor.a *= max(center, outerRing);`
-          : "if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard;";
-        shader.fragmentShader = shader.fragmentShader.replace(
-          "#include <clipping_planes_fragment>",
-          `#include <clipping_planes_fragment>\ndiffuseColor.a *= vMarkerOpacity;\n${markerShape}`,
-        );
-        shader.fragmentShader = shader.fragmentShader.replace("#include <common>", "#include <common>\nvarying float vMarkerOpacity;");
-      };
-      material.customProgramCacheKey = () => `earthview-selected-data-points-v4-${ringed}`;
-      return material;
-    },
-    [ringed],
-  );
-  const hoverMaterial = useMemo(() => {
-    const material = new PointsMaterial({
-      depthWrite: false,
-      size: ringed ? 8.1 : 4.8,
-      sizeAttenuation: false,
-      transparent: true,
-      opacity: 0.96,
-    });
-    material.onBeforeCompile = (shader) => {
-      shader.vertexShader = shader.vertexShader
-        .replace("#include <common>", "#include <common>\nattribute float markerSize;\nattribute float markerOpacity;\nvarying float vMarkerOpacity;")
-        .replace("#include <begin_vertex>", "#include <begin_vertex>\nvMarkerOpacity = markerOpacity;")
-        .replace("gl_PointSize = size;", "gl_PointSize = markerSize * size;");
-      const markerShape = ringed
-        ? `float radius = length(gl_PointCoord - vec2(0.5)) * 2.0; if (radius > 1.0) discard; float center = 1.0 - smoothstep(0.28, 0.34, radius); float outerRing = 1.0 - smoothstep(0.065, 0.11, abs(radius - 0.72)); diffuseColor.a *= max(center, outerRing);`
-        : "if (length(gl_PointCoord - vec2(0.5)) > 0.5) discard;";
-      shader.fragmentShader = shader.fragmentShader.replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>\ndiffuseColor.a *= vMarkerOpacity;\n${markerShape}`);
-      shader.fragmentShader = shader.fragmentShader.replace("#include <common>", "#include <common>\nvarying float vMarkerOpacity;");
-    };
-    material.customProgramCacheKey = () => `earthview-hover-data-points-v2-${ringed}`;
-    return material;
-  }, [ringed]);
+  const markerMaterial = useMemo(() => createPointMaterial({
+    size: ringed ? 6.8 : 4.2,
+    opacity: opacityFor ? 1 : 0.9,
+    ringed,
+    cacheKey: "earthview-data-points-v4",
+  }), [opacityFor, ringed]);
+  const selectedMaterial = useMemo(() => createPointMaterial({
+    size: ringed ? 9.5 : 6.5,
+    ringed,
+    selected: true,
+    cacheKey: "earthview-selected-data-points-v4",
+  }), [ringed]);
+  const hoverMaterial = useMemo(() => createPointMaterial({
+    size: ringed ? 8.1 : 4.8,
+    opacity: 0.96,
+    ringed,
+    cacheKey: "earthview-hover-data-points-v2",
+  }), [ringed]);
 
   useEffect(() => () => geometry.dispose(), [geometry]);
   useEffect(() => () => selectedGeometry?.dispose(), [selectedGeometry]);

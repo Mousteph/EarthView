@@ -33,10 +33,10 @@ export function useMapLayers(enabledOrbitalModes: readonly OrbitalMode[], orbita
     () => pipelineStatusOptions(Object.values(pipelineFeeds.feeds).flatMap((feed) => feed.feed?.pipelines ?? [])),
     [pipelineFeeds.feeds],
   );
-  const pipelineCounts = useMemo(() => ({
-    gas: pipelines.filter((pipeline) => pipeline.fuel === "gas").length,
-    oil: pipelines.filter((pipeline) => pipeline.fuel === "oil").length,
-  }), [pipelines]);
+  const pipelineCounts = useMemo(() => pipelines.reduce((counts, pipeline) => {
+    counts[pipeline.fuel] += 1;
+    return counts;
+  }, { gas: 0, oil: 0 }), [pipelines]);
   const satelliteCatalog = satellitesFeed.satellites;
 
   const orbitalObjects = useMemo(() => composeOrbitalObjects(enabledOrbitalModes, {
