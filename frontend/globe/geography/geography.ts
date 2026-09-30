@@ -5,7 +5,7 @@ import {
   Uint32BufferAttribute,
   Vector3,
 } from "three";
-import type { GeographySources, PreparedGeography } from "./geographyPreparation";
+import type { PreparedGeography } from "./geographyPreparation";
 
 export type GeographicLod = "50m" | "10m";
 

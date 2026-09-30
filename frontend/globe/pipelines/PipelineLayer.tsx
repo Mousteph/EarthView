@@ -10,7 +10,7 @@ import {
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 import { LineSegments2 } from "three/addons/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/addons/lines/LineSegmentsGeometry.js";
-import type { Pipeline, PipelineCoordinate, PipelineFuel } from "@/features/pipelines/model";
+import type { Pipeline, PipelineCoordinate } from "@/features/pipelines/model";
 import type { HoverKey } from "@/features/map/hover";
 import { DESIGN_COLOR_TOKENS, readDesignColor } from "@/shared/designTokens";
 import { ScreenSpatialIndex } from "@/globe/interaction/ScreenSpatialIndex";
