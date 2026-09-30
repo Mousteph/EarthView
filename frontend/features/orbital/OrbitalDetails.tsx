@@ -1,17 +1,27 @@
-import type { CSSProperties, RefObject } from "react";
-import type { OrbitalMode, Satellite, SelectedSatellitePosition } from "./model";
+import type { CSSProperties, RefCallback, RefObject } from "react";
+import { isInternationalSpaceStation, type OrbitalMode, type Satellite, type SelectedSatellitePosition } from "./model";
 import { missionTypeColor } from "./colors";
 import { InspectionPanel } from "@/shared/ui/InspectionPanel";
 import { formatCoordinates } from "@/shared/ui/format";
+import { ISSLiveSection } from "./ISSLiveSection";
 
-export function OrbitalDetails({ event: satellite, mode, position, detailsRef, onClose }: {
+export function OrbitalDetails({ event: satellite, mode, position, detailsRef, onClose, issPlayerVisible, issPlayerDetached, issVideoUnavailable,
+  onInlinePlayerHost, onDetachISSPlayer, onRetryISSPlayer, onShowISSPlayer }: {
   readonly event: Satellite;
   readonly mode: OrbitalMode;
   readonly position: SelectedSatellitePosition | null;
   readonly detailsRef: RefObject<HTMLElement | null>;
   readonly onClose: () => void;
+  readonly issPlayerVisible: boolean;
+  readonly issPlayerDetached: boolean;
+  readonly issVideoUnavailable: boolean;
+  readonly onInlinePlayerHost: RefCallback<HTMLDivElement>;
+  readonly onDetachISSPlayer: () => void;
+  readonly onRetryISSPlayer: () => void;
+  readonly onShowISSPlayer: () => void;
 }) {
   const objectLabel = mode === "active" ? "Satellite" : mode === "debris" ? "Debris" : "Rocket body";
+  const isISS = isInternationalSpaceStation(satellite);
   const operational = satellite.operationalStatus === "active" ? true : satellite.operationalStatus === "inactive" ? false : null;
   const sections: readonly [string, readonly (readonly [string, string | null | undefined])[]][] = [
     ["Identity", [["NORAD ID", String(satellite.noradId)], ["International designator", satellite.internationalDesignator], ["Object type", satellite.objectType], ["Mission type", mode === "active" ? satellite.missionType : null], ["Constellation / group", mode === "active" ? satellite.constellation : null]]],
@@ -33,8 +43,21 @@ export function OrbitalDetails({ event: satellite, mode, position, detailsRef, o
         {operational !== null ? <span className={`orbital-status-pill ${operational ? "is-active" : "is-inactive"}`}><i aria-hidden="true" />{operational ? "Active" : "Inactive"}</span> : null}
       </div>
     </div>
+    {isISS ? <div className="orbital-detail-section iss-telemetry-section">
+      <h3>Live Position</h3>
+      <dl>
+        <div className="iss-coordinate-row"><dt>Latitude / longitude</dt><dd>{position ? formatCoordinates(position.latitude, position.longitude) : "Calculating"}</dd></div>
+        <div><dt>Altitude</dt><dd>{position ? `${position.altitudeKm.toFixed(1)} km` : "Calculating"}</dd></div>
+        <div><dt>Velocity</dt><dd>{position ? `${position.velocityKmS.toFixed(2)} km/s` : "Calculating"}</dd></div>
+      </dl>
+    </div> : null}
+    {isISS ? <ISSLiveSection visible={issPlayerVisible} detached={issPlayerDetached} unavailable={issVideoUnavailable}
+      inlineHostRef={onInlinePlayerHost} onDetach={onDetachISSPlayer}
+      onRetry={onRetryISSPlayer} onShow={onShowISSPlayer} /> : null}
     {sections.map(([title, rows]) => {
-      const availableRows = rows.filter(([, value]) => value != null && value !== "");
+      if (isISS && title === "Position") return null;
+      const availableRows = rows.filter(([label, value]) => value != null && value !== ""
+        && !(isISS && (label === "Altitude" || label === "Velocity")));
       return availableRows.length ? <div className="orbital-detail-section" key={title}>
         <h3>{title}</h3><dl>{availableRows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
       </div> : null;

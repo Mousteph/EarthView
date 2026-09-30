@@ -12,7 +12,8 @@ EarthView-authored code is released under the MIT License. Bundled data, assets,
 | --- | --- |
 | Earthquakes | Recent earthquake locations, magnitude, depth, and event details. |
 | Active fires | Near-real-time fire and thermal hotspot detections. |
-| Orbital objects | Active satellites, debris, and rocket bodies, with filters and object details. |
+| Orbital objects | Active satellites, debris, and rocket bodies, with filters and object details. Selecting the ISS shows live orbital telemetry and an embedded live Earth broadcast; playback starts in the YouTube player and the official NASA camera page remains available if the stream is temporarily unavailable. |
+| Pipelines | Global gas and oil transmission routes, with independent fuel layers and status filters. |
 | Geographic context | Country geography and land/seafloor relief shown on the globe. |
 
 ## Quick start and configuration

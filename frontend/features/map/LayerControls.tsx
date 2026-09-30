@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type RefObject, type TransitionEvent } from "react";
+import { useCallback, useEffect, useState, type RefCallback, type RefObject, type TransitionEvent } from "react";
 import { EarthquakeDetails } from "@/features/earthquakes/EarthquakeDetails";
 import { FireDetails } from "@/features/fires/FireDetails";
 import { OrbitalDetails } from "@/features/orbital/OrbitalDetails";
@@ -15,13 +15,22 @@ import type { SelectedEvent } from "./selection";
 export type LayerControl = LayerRowModel;
 type ControlsPhase = "expanded" | "collapsing" | "shrinking" | "compact" | "expanding" | "revealing" | "appearing";
 
-export function LayerControls({ layers, selected, detailsRef, onClose, orbitalControls, summaryItems, pipelineControls }: {
+export function LayerControls({ layers, selected, detailsRef, onClose, orbitalControls, summaryItems, pipelineControls,
+  issPlayerVisible, issPlayerDetached, issVideoUnavailable, onInlinePlayerHost, onDetachISSPlayer,
+  onRetryISSPlayer, onShowISSPlayer }: {
   readonly layers: readonly LayerControl[];
   readonly selected: SelectedEvent | null;
   readonly detailsRef: RefObject<HTMLElement | null>;
   readonly onClose: () => void;
   readonly orbitalControls: OrbitalControls;
   readonly summaryItems: readonly OrbitalSummaryItem[];
+  readonly issPlayerVisible: boolean;
+  readonly issPlayerDetached: boolean;
+  readonly issVideoUnavailable: boolean;
+  readonly onInlinePlayerHost: RefCallback<HTMLDivElement>;
+  readonly onDetachISSPlayer: () => void;
+  readonly onRetryISSPlayer: () => void;
+  readonly onShowISSPlayer: () => void;
   readonly pipelineControls: {
     readonly enabledFuels: readonly PipelineFuel[];
     readonly feeds: Readonly<Record<PipelineFuel, PipelineFeedState>>;
@@ -113,7 +122,10 @@ export function LayerControls({ layers, selected, detailsRef, onClose, orbitalCo
     </aside>
     {selected?.type === "earthquakes" ? <EarthquakeDetails event={selected.event} detailsRef={detailsRef} onClose={onClose} />
       : selected?.type === "fires" ? <FireDetails event={selected.event} detailsRef={detailsRef} onClose={onClose} />
-        : selected?.type === "satellites" ? <OrbitalDetails event={selected.event} mode={selected.mode} position={selected.position} detailsRef={detailsRef} onClose={onClose} />
+        : selected?.type === "satellites" ? <OrbitalDetails event={selected.event} mode={selected.mode} position={selected.position} detailsRef={detailsRef} onClose={onClose}
+          issPlayerVisible={issPlayerVisible} issPlayerDetached={issPlayerDetached} issVideoUnavailable={issVideoUnavailable}
+          onInlinePlayerHost={onInlinePlayerHost} onDetachISSPlayer={onDetachISSPlayer}
+          onRetryISSPlayer={onRetryISSPlayer} onShowISSPlayer={onShowISSPlayer} />
           : selected?.type === "pipelines" ? <PipelineDetails pipeline={selected.event} detailsRef={detailsRef} onClose={onClose} />
           : <section className="inspection-prompt" aria-label="Explore Earth data">
             <h2>EXPLORE EARTH, AS IT HAPPENS</h2>
