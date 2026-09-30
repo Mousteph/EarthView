@@ -8,9 +8,12 @@ import { useThree } from "@react-three/fiber";
 import type { Earthquake } from "@/features/earthquakes/model";
 import type { Fire } from "@/features/fires/model";
 import type { OrbitalObject, SelectedSatellitePosition } from "@/features/orbital/model";
+import type { Pipeline } from "@/features/pipelines/model";
+import type { HoverKey } from "@/features/map/hover";
 import { Earth } from "./relief/Earth";
 import { PointLayer, type SelectedPointScreenPosition } from "./points/PointLayer";
 import { SatelliteLayer } from "./orbital/SatelliteLayer";
+import { PipelineLayer } from "./pipelines/PipelineLayer";
 import { GeographicLayers } from "./geography/GeographicLayers";
 import type { GeographicLod } from "./geography/geography";
 import { RELIEF } from "./relief/relief";
@@ -34,18 +37,28 @@ type GlobeSceneProps = {
   readonly satellitesVisible: boolean;
   readonly satelliteVisibility: Uint8Array | null;
   readonly selectedSatelliteId: string | null;
+  readonly pipelines: readonly Pipeline[];
+  readonly pipelinesVisible: boolean;
+  readonly selectedPipelineId: string | null;
   readonly onEarthquakeSelect: (earthquakeId: string) => void;
   readonly onFireSelect: (fireId: string) => void;
   readonly onSatelliteSelect: (satelliteId: string) => void;
+  readonly onPipelineSelect: (pipelineId: string) => void;
   readonly onSelectedSatelliteData: (position: SelectedSatellitePosition | null) => void;
   readonly onSelectedPositionChange: (position: SelectedPointScreenPosition | null) => void;
   readonly onScaleChange: (scale: MapScale) => void;
+  readonly hovered: HoverKey | null;
+  readonly onHover: (key: HoverKey, clientX: number, clientY: number, distance: number, event: PointerEvent) => void;
+  readonly onHoverEnd: (key: HoverKey) => void;
 };
 
 export type MapScale = { readonly distanceKm: number; readonly widthPx: number };
 
 const earthquakeSize = (earthquake: Earthquake) => Math.min(3, Math.max(0.75, 0.75 + Math.max(0, earthquake.magnitude) * 0.35));
 const fireSize = (fire: Fire) => Math.min(2.2, Math.max(0.75, 0.8 + Math.log1p(fire.frp ?? 0) * 0.22));
+const fireOpacity = (fire: Fire) => fire.frp === null
+  ? 0.65
+  : 0.35 + 0.6 * Math.min(1, Math.log1p(Math.max(0, fire.frp)) / Math.log1p(300));
 
 function RenderScheduler({ active }: { active: boolean }) {
   useFrame(({ invalidate }) => {
@@ -103,8 +116,7 @@ function GlobeControls({
     autoRotate={autoRotate}
     autoRotateSpeed={0.16}
     enablePan={false}
-    enableDamping
-    dampingFactor={0.12}
+    enableDamping={false}
     rotateSpeed={0.25}
     zoomSpeed={0.28}
     minDistance={1.15}
@@ -126,12 +138,19 @@ function GlobeSceneComponent({
   satellitesVisible,
   satelliteVisibility,
   selectedSatelliteId,
+  pipelines,
+  pipelinesVisible,
+  selectedPipelineId,
   onEarthquakeSelect,
   onFireSelect,
   onSatelliteSelect,
+  onPipelineSelect,
   onSelectedSatelliteData,
   onSelectedPositionChange,
   onScaleChange,
+  hovered,
+  onHover,
+  onHoverEnd,
 }: GlobeSceneProps) {
   const debugEnabled = usePerformanceDebugEnabled();
   const [performance, setPerformance] = useState<PerformanceSnapshot | null>(null);
@@ -150,14 +169,19 @@ function GlobeSceneComponent({
           <Suspense fallback={null}>
             <ReliefSurface onActiveLodChange={handleActiveLodChange} />
           </Suspense>
+          <PipelineLayer pipelines={pipelines} visible={pipelinesVisible} selectedId={selectedPipelineId} hoveredId={hovered?.type === "pipelines" ? hovered.id : null} onSelect={onPipelineSelect} onHover={onHover} onHoverEnd={onHoverEnd} />
           <PointLayer
             entities={earthquakes}
             selectedId={selectedEarthquakeId}
             visible={earthquakesVisible}
             colorToken={DESIGN_COLOR_TOKENS.earthquake}
             ringed
+            layerType="earthquakes"
+            hoveredId={hovered?.type === "earthquakes" ? hovered.id : null}
             sizeFor={earthquakeSize}
             onSelect={onEarthquakeSelect}
+            onHover={onHover}
+            onHoverEnd={onHoverEnd}
             onSelectedPositionChange={onSelectedPositionChange}
           />
           <PointLayer
@@ -165,15 +189,23 @@ function GlobeSceneComponent({
             selectedId={selectedFireId}
             visible={firesVisible}
             colorToken={DESIGN_COLOR_TOKENS.fire}
+            layerType="fires"
+            hoveredId={hovered?.type === "fires" ? hovered.id : null}
             sizeFor={fireSize}
+            opacityFor={fireOpacity}
             onSelect={onFireSelect}
+            onHover={onHover}
+            onHoverEnd={onHoverEnd}
             onSelectedPositionChange={onSelectedPositionChange}
           />
           {satellitesVisible && satellites.length > 0 ? <SatelliteLayer
             satellites={satellites}
             visibility={satelliteVisibility}
             selectedId={selectedSatelliteId}
+            hoveredId={hovered?.type === "satellites" ? hovered.id : null}
             onSelect={onSatelliteSelect}
+            onHover={onHover}
+            onHoverEnd={onHoverEnd}
             onSelectedData={onSelectedSatelliteData}
             onSelectedPositionChange={onSelectedPositionChange}
           /> : null}

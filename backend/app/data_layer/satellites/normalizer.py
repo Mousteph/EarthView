@@ -352,26 +352,3 @@ class SatelliteNormalizer:
             "launch_site": cls.launch_site_names.get(launch_code, launch_code),
             "launch_site_code": launch_code,
         }
-
-
-    @staticmethod
-    def to_omm_record(satellite: Satellite) -> Dict[str, Any]:
-        return {
-            "OBJECT_NAME": satellite.name,
-            "OBJECT_ID": satellite.internationalDesignator,
-            "NORAD_CAT_ID": satellite.noradId,
-            "EPOCH": satellite.epoch,
-            "MEAN_MOTION": satellite.meanMotion,
-            "ECCENTRICITY": satellite.eccentricity,
-            "INCLINATION": satellite.inclination,
-            "RA_OF_ASC_NODE": satellite.rightAscension,
-            "ARG_OF_PERICENTER": satellite.argOfPericenter,
-            "MEAN_ANOMALY": satellite.meanAnomaly,
-            "BSTAR": satellite.bstar,
-            "MEAN_MOTION_DOT": satellite.meanMotionDot,
-            "MEAN_MOTION_DDOT": satellite.meanMotionDdot,
-            "EPHEMERIS_TYPE": satellite.ephemerisType,
-            "CLASSIFICATION_TYPE": satellite.classificationType,
-            "ELEMENT_SET_NO": satellite.elementSetNo,
-            "REV_AT_EPOCH": satellite.revolutionNumber,
-        }

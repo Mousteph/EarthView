@@ -4,11 +4,13 @@ from typing import Annotated, List
 
 from .data_layer.earthquakes import Earthquake, EarthquakeDataLayer
 from .data_layer.fires import Fire, FireDataLayer
+from .data_layer.pipelines import PipelineDataLayer, PipelineFeed
 from .data_layer.satellites import SatelliteFeed, SatelliteDataLayer
 
 app = FastAPI()
 _earthquake_data_layer = EarthquakeDataLayer()
 _fire_data_layer = FireDataLayer()
+_pipeline_data_layer = PipelineDataLayer()
 _satellite_data_layer = SatelliteDataLayer()
 
 
@@ -60,6 +62,36 @@ async def get_satellites(
         raise HTTPException(
             status_code=502,
             detail="Satellite data is temporarily unavailable",
+            headers={"Cache-Control": "no-store"},
+        ) from error
+
+    response.headers["Cache-Control"] = "no-store"
+    return feed
+
+
+@app.get("/api/pipelines/gas")
+async def get_gas_pipelines(response: Response) -> PipelineFeed:
+    try:
+        feed = await _pipeline_data_layer.fetch("gas")
+    except (httpx.HTTPError, ValueError) as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Gas pipeline data is temporarily unavailable",
+            headers={"Cache-Control": "no-store"},
+        ) from error
+
+    response.headers["Cache-Control"] = "no-store"
+    return feed
+
+
+@app.get("/api/pipelines/oil")
+async def get_oil_pipelines(response: Response) -> PipelineFeed:
+    try:
+        feed = await _pipeline_data_layer.fetch("oil")
+    except (httpx.HTTPError, ValueError) as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Oil pipeline data is temporarily unavailable",
             headers={"Cache-Control": "no-store"},
         ) from error
 

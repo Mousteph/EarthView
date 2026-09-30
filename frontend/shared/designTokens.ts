@@ -7,6 +7,8 @@ export const DESIGN_COLOR_TOKENS = {
   earthquake: "--color-earthquake",
   fire: "--color-fire",
   satellite: "--color-satellite",
+  pipelineGas: "--color-pipeline-gas",
+  pipelineOil: "--color-pipeline-oil",
   debris: "--color-debris",
   rocketBody: "--color-rocket-body",
   missionCommunications: "--color-satellite",

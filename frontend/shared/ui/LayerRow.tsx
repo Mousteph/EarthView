@@ -15,7 +15,7 @@ type LayerRowBase = {
 
 export type LayerRowModel = LayerRowBase & (
   | { readonly id: "earthquakes" | "fires"; readonly onToggle: () => void }
-  | { readonly id: "satellites" }
+  | { readonly id: "satellites" | "pipelines" }
 );
 
 export function LayerRow({ layer, expanded, onDisclosure, children }: {
@@ -24,12 +24,17 @@ export function LayerRow({ layer, expanded, onDisclosure, children }: {
   readonly onDisclosure?: () => void;
   readonly children?: ReactNode;
 }) {
-  const isDisclosure = layer.id === "satellites";
+  const isDisclosure = layer.id === "satellites" || layer.id === "pipelines";
+  const handleToggle = () => {
+    if (layer.id === "earthquakes" || layer.id === "fires") layer.onToggle();
+    else onDisclosure?.();
+  };
   return <div className="layer-row">
     <div className="layer-actions">
-      <button className={`layer-toggle layer-toggle-${layer.id}`} type="button" onClick={layer.id === "satellites" ? onDisclosure : layer.onToggle}
+      <button className={`layer-toggle layer-toggle-${layer.id}`} type="button" onClick={handleToggle}
         aria-label={isDisclosure ? `${expanded ? "Collapse" : "Expand"} ${layer.label} options` : `${layer.visible ? "Hide" : "Show"} ${layer.label} layer`}
-        aria-pressed={layer.visible} aria-expanded={isDisclosure ? expanded : undefined}>
+        aria-pressed={isDisclosure ? undefined : layer.visible} aria-expanded={isDisclosure ? expanded : undefined}
+        data-visible={layer.visible} data-tooltip={layer.label}>
         <span className="layer-toggle-circle" aria-hidden="true" />
         <span className="layer-copy"><strong>{layer.label}{layer.visible && layer.hasLoaded ? <> <output className="layer-heading-count">– {formatCount(layer.count)}</output></> : null}</strong><span>{layer.description}</span></span>
       </button>
@@ -38,7 +43,7 @@ export function LayerRow({ layer, expanded, onDisclosure, children }: {
       </button>
     </div>
     {layer.error ? <p className="layer-status" role="alert">{layer.error}</p> : null}
-    {layer.stale && !layer.error ? <p className="layer-status layer-status-stale">Using cached orbital data or metadata</p> : null}
+    {layer.stale && !layer.error ? <p className="layer-status layer-status-stale">Using cached data</p> : null}
     {children}
   </div>;
 }

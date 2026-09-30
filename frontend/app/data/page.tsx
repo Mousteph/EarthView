@@ -4,7 +4,7 @@ import { EarthViewHeader } from "@/shared/ui/EarthViewHeader";
 
 export const metadata: Metadata = {
   title: "Data Sources | EarthView",
-  description: "Sources for EarthView's earthquake, active fire, geography, and relief data.",
+  description: "Sources for EarthView's earthquake, fire, pipeline, geography, and relief data.",
 };
 
 const sources = [
@@ -37,6 +37,24 @@ const sources = [
   },
   {
     number: "04",
+    category: "Infrastructure",
+    title: "Gas pipelines",
+    provider: "Global Energy Monitor (GEM)",
+    description: "Gas transmission routes and project metadata from the Global Gas Infrastructure Tracker, November 2025 release. Route geometry comes from GEM's public pipeline map export. Dataset data is licensed under CC BY 4.0; missing values are not inferred.",
+    href: "https://globalenergymonitor.org/projects/global-gas-infrastructure-tracker",
+    linkLabel: "View the Global Gas Infrastructure Tracker",
+  },
+  {
+    number: "05",
+    category: "Infrastructure",
+    title: "Oil pipelines",
+    provider: "Global Energy Monitor (GEM)",
+    description: "Crude oil and natural gas liquids (NGL) transmission routes and project metadata from the Global Oil Infrastructure Tracker, June 2026 release. Route geometry comes from GEM's public pipeline map export. Dataset data is licensed under CC BY 4.0; missing values are not inferred.",
+    href: "https://globalenergymonitor.org/projects/global-oil-infrastructure-tracker",
+    linkLabel: "View the Global Oil Infrastructure Tracker",
+  },
+  {
+    number: "06",
     category: "Base geography",
     title: "Land, lakes, islands, and borders",
     provider: "Natural Earth",
@@ -45,7 +63,7 @@ const sources = [
     linkLabel: "View Natural Earth data and terms",
   },
   {
-    number: "05",
+    number: "07",
     category: "Base geography",
     title: "Land and seafloor relief",
     provider: "GEBCO Bathymetric Compilation Group (2026), GEBCO_2026 Grid",
