@@ -41,6 +41,38 @@ export function buildOrbitPath(
   return points;
 }
 
+export function buildCenteredOrbitPath(
+  centerMs: number,
+  periodMinutes: number,
+  fixedGmst: number,
+  positionAt: (timeMs: number) => { x: number; y: number; z: number } | null,
+  samplesPerSide = 128,
+) {
+  if (!Number.isFinite(periodMinutes) || periodMinutes <= 0 || !Number.isInteger(samplesPerSide) || samplesPerSide < 1) return null;
+  const sampleCount = samplesPerSide * 2 + 1;
+  const points = new Float32Array(sampleCount * 3);
+  const cosine = Math.cos(fixedGmst);
+  const sine = Math.sin(fixedGmst);
+  const halfPeriodMs = periodMinutes * 30_000;
+
+  for (let index = 0; index < sampleCount; index += 1) {
+    const sampleTime = centerMs - halfPeriodMs + index * halfPeriodMs / samplesPerSide;
+    const position = positionAt(sampleTime);
+    if (!position) return null;
+    const offset = index * 3;
+    const [x, y, z] = earthFixedToGlobe(
+      position.x * cosine + position.y * sine,
+      -position.x * sine + position.y * cosine,
+      position.z,
+    );
+    points[offset] = x;
+    points[offset + 1] = y;
+    points[offset + 2] = z;
+  }
+
+  return points;
+}
+
 export function segmentHiddenByEarth(
   cameraX: number, cameraY: number, cameraZ: number,
   pointX: number, pointY: number, pointZ: number,

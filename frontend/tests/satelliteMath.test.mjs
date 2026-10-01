@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildCenteredOrbitPath,
   buildOrbitPath,
   EARTH_RADIUS_KM,
   earthFixedToGlobe,
@@ -40,4 +41,27 @@ test("samples one local orbit in a fixed Earth orientation", () => {
   assert.ok(Math.abs(path[2] - radius / EARTH_RADIUS_KM) < 1e-6);
   assert.ok(Math.abs(path[3] - radius / EARTH_RADIUS_KM) < 1e-6);
   assert.equal(buildOrbitPath(0, period, 0, () => null), null);
+});
+
+test("samples equal past and future spans around the exact center time", () => {
+  const centerMs = 1_000_000;
+  const period = 96;
+  const radius = 7000;
+  const sampledTimes = [];
+  const path = buildCenteredOrbitPath(centerMs, period, 0, (timeMs) => {
+    sampledTimes.push(timeMs);
+    const angle = ((timeMs - centerMs) / (period * 60_000)) * 2 * Math.PI;
+    return { x: radius * Math.cos(angle), y: radius * Math.sin(angle), z: 0 };
+  }, 2);
+
+  assert.ok(path);
+  assert.equal(path.length, 15);
+  assert.equal(sampledTimes.length, 5);
+  assert.equal(sampledTimes[0], centerMs - period * 30_000);
+  assert.equal(sampledTimes[2], centerMs);
+  assert.equal(sampledTimes[4], centerMs + period * 30_000);
+  assert.ok(Math.abs(path[6]) < 1e-6);
+  assert.ok(Math.abs(path[8] - radius / EARTH_RADIUS_KM) < 1e-6);
+  assert.equal(buildCenteredOrbitPath(centerMs, period, 0, () => null, 2), null);
+  assert.equal(buildCenteredOrbitPath(centerMs, period, 0, () => ({ x: radius, y: 0, z: 0 }), 0), null);
 });

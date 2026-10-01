@@ -1,5 +1,5 @@
 import { eciToGeodetic, gstime, json2satrec, propagate, type SatRec } from "satellite.js";
-import { buildOrbitPath, EARTH_RADIUS_KM, orbitPeriodMinutes, SNAPSHOT_INTERVAL_MS } from "./satelliteMath";
+import { buildCenteredOrbitPath, EARTH_RADIUS_KM, orbitPeriodMinutes, SNAPSHOT_INTERVAL_MS } from "./satelliteMath";
 import type { OrbitalElements, SatelliteWorkerInput, SatelliteWorkerOutput } from "./satelliteProtocol";
 
 type OrbitRecord = { satellite: OrbitalElements; satrec: SatRec | null };
@@ -90,7 +90,7 @@ function sendSnapshot(initializationMs?: number) {
 
 function trajectory(record: OrbitRecord, timeMs: number) {
   const period = orbitPeriodMinutes(record.satellite.meanMotion);
-  return buildOrbitPath(timeMs, period, gstime(new Date(timeMs)), (sampleTime) => orbitPosition(record, sampleTime)?.position ?? null);
+  return buildCenteredOrbitPath(timeMs, period, gstime(new Date(timeMs)), (sampleTime) => orbitPosition(record, sampleTime)?.position ?? null);
 }
 
 function sendSelected(forceTrajectory = false) {

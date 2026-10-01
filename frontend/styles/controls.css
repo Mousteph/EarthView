@@ -239,15 +239,15 @@
 
 .event-details .orbital-detail-section dt, .event-details .orbital-detail-section dd { font-size: 13px; }
 
-.iss-telemetry-section dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px !important; }
+.orbital-live-position-section dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px !important; }
 
-.event-details .iss-telemetry-section dl > div { display: block; min-width: 0; }
+.event-details .orbital-live-position-section dl > div { display: block; min-width: 0; }
 
-.iss-telemetry-section .iss-coordinate-row { grid-column: 1 / -1; }
+.orbital-live-position-section .live-coordinate-row { grid-column: 1 / -1; }
 
-.iss-telemetry-section dt { margin-bottom: 2px; font-size: 10px !important; letter-spacing: .04em; }
+.orbital-live-position-section dt { margin-bottom: 2px; font-size: 10px !important; letter-spacing: .04em; }
 
-.iss-telemetry-section dd { color: var(--color-orbital-label-active); font-size: 13px !important; font-variant-numeric: tabular-nums; }
+.orbital-live-position-section dd { color: var(--color-orbital-label-active); font-size: 13px !important; font-variant-numeric: tabular-nums; }
 
 .iss-live-section { display: grid; gap: 10px; }
 

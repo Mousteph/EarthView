@@ -40,6 +40,26 @@ type Snapshot = { first: Float32Array; second: Float32Array; startMs: number; en
 const pointColors = new Map<string, Color>();
 const satellitePickRadiusPixels = 6;
 const dragThresholdPixels = 5;
+const trajectoryTubeRadius = 0.0028;
+const trajectoryDashLength = 0.075;
+const trajectoryDashGap = 0.045;
+const trajectoryRadialSegments = 5;
+
+type TrajectoryUniforms = {
+  readonly currentDistance: { value: number };
+  readonly dashLength: { value: number };
+  readonly dashPeriod: { value: number };
+};
+
+type TrajectoryGeometry = {
+  readonly geometry: BufferGeometry;
+  readonly centerline: Float32Array;
+  readonly tubeSegments: number;
+  readonly pathLength: number;
+  readonly radialSegments: number;
+  activeRingIndex: number;
+  readonly activeRingBase: Float32Array;
+};
 
 function colorForObject(satellite: OrbitalObject): Color {
   const color = orbitalObjectColor(satellite);
@@ -102,6 +122,105 @@ function setGeometryPositions(geometry: BufferGeometry, first: Float32Array, sec
   future.needsUpdate = true;
 }
 
+function createTrajectoryGeometry(positions: Float32Array): TrajectoryGeometry | null {
+  const pointCount = positions.length / 3;
+  if (pointCount < 3 || pointCount % 2 !== 1) return null;
+  const points = Array.from({ length: pointCount }, (_, index) => new Vector3(
+    positions[index * 3], positions[index * 3 + 1], positions[index * 3 + 2],
+  ));
+  const curve = new CatmullRomCurve3(points, false);
+  const tubeSegments = pointCount * 8;
+  const pathLength = curve.getLength();
+  const geometry = new TubeGeometry(curve, tubeSegments, trajectoryTubeRadius, trajectoryRadialSegments, false);
+  const ringVertexCount = trajectoryRadialSegments + 1;
+  const vertexCount = (tubeSegments + 1) * ringVertexCount;
+  const distanceValues = new Float32Array(vertexCount);
+  for (let ring = 0; ring <= tubeSegments; ring += 1) {
+    const distance = ring / tubeSegments * pathLength;
+    distanceValues.fill(distance, ring * ringVertexCount, (ring + 1) * ringVertexCount);
+  }
+  geometry.setAttribute("pathDistance", new BufferAttribute(distanceValues, 1));
+
+  const centerline = new Float32Array((tubeSegments + 1) * 3);
+  const sample = new Vector3();
+  const centerPointOffset = Math.floor(pointCount / 2) * 3;
+  let activeRingIndex = 0;
+  let closestCenterDistance = Infinity;
+  for (let ring = 0; ring <= tubeSegments; ring += 1) {
+    curve.getPointAt(ring / tubeSegments, sample);
+    const offset = ring * 3;
+    centerline[offset] = sample.x;
+    centerline[offset + 1] = sample.y;
+    centerline[offset + 2] = sample.z;
+    const dx = sample.x - positions[centerPointOffset];
+    const dy = sample.y - positions[centerPointOffset + 1];
+    const dz = sample.z - positions[centerPointOffset + 2];
+    const distanceSquared = dx * dx + dy * dy + dz * dz;
+    if (distanceSquared < closestCenterDistance) {
+      closestCenterDistance = distanceSquared;
+      activeRingIndex = ring;
+    }
+  }
+
+  const vertexOffset = activeRingIndex * ringVertexCount * 3;
+  const geometryPositions = (geometry.getAttribute("position") as BufferAttribute).array as Float32Array;
+  return {
+    geometry,
+    centerline,
+    tubeSegments,
+    pathLength,
+    radialSegments: trajectoryRadialSegments,
+    activeRingIndex,
+    activeRingBase: geometryPositions.slice(vertexOffset, vertexOffset + ringVertexCount * 3),
+  };
+}
+
+function updateTrajectoryAnchor(path: TrajectoryGeometry, x: number, y: number, z: number, material: MeshBasicMaterial) {
+  const ringVertexCount = path.radialSegments + 1;
+  let bestRingIndex = path.activeRingIndex;
+  let bestDistance = Infinity;
+  for (let ring = 1; ring < path.tubeSegments; ring += 1) {
+    const offset = ring * 3;
+    const dx = path.centerline[offset] - x;
+    const dy = path.centerline[offset + 1] - y;
+    const dz = path.centerline[offset + 2] - z;
+    const distance = dx * dx + dy * dy + dz * dz;
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestRingIndex = ring;
+    }
+  }
+
+  const position = path.geometry.getAttribute("position") as BufferAttribute;
+  const positionValues = position.array as Float32Array;
+  const previousRingIndex = path.activeRingIndex;
+  const previousVertexOffset = previousRingIndex * ringVertexCount;
+  const nextVertexOffset = bestRingIndex * ringVertexCount;
+  if (bestRingIndex !== previousRingIndex) {
+    positionValues.set(path.activeRingBase, previousVertexOffset * 3);
+    path.activeRingBase.set(positionValues.subarray(nextVertexOffset * 3, (nextVertexOffset + ringVertexCount) * 3));
+    path.activeRingIndex = bestRingIndex;
+  }
+
+  const nextCenterOffset = bestRingIndex * 3;
+  const deltaX = x - path.centerline[nextCenterOffset];
+  const deltaY = y - path.centerline[nextCenterOffset + 1];
+  const deltaZ = z - path.centerline[nextCenterOffset + 2];
+  for (let vertex = 0; vertex < ringVertexCount; vertex += 1) {
+    const offset = vertex * 3;
+    positionValues[nextVertexOffset * 3 + offset] = path.activeRingBase[offset] + deltaX;
+    positionValues[nextVertexOffset * 3 + offset + 1] = path.activeRingBase[offset + 1] + deltaY;
+    positionValues[nextVertexOffset * 3 + offset + 2] = path.activeRingBase[offset + 2] + deltaZ;
+  }
+  position.clearUpdateRanges();
+  if (bestRingIndex !== previousRingIndex) position.addUpdateRange(previousVertexOffset * 3, ringVertexCount * 3);
+  position.addUpdateRange(nextVertexOffset * 3, ringVertexCount * 3);
+  position.needsUpdate = true;
+
+  const uniforms = material.userData.trajectoryUniforms as TrajectoryUniforms;
+  uniforms.currentDistance.value = bestRingIndex / path.tubeSegments * path.pathLength;
+}
+
 export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, onSelect, onHover, onHoverEnd, onSelectedData, onSelectedPositionChange }: SatelliteLayerProps) {
   const { camera, gl, invalidate, size } = useThree();
   const group = useRef<Group>(null);
@@ -139,17 +258,35 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
   const selectedMaterial = useMemo(() => createMaterial(12, true), []);
   const hoverMaterial = useMemo(() => createMaterial(9, true), []);
   const issMaterial = useMemo(() => createMaterial(23, false, true), []);
-  const pathMaterial = useMemo(() => new MeshBasicMaterial({ transparent: true, opacity: 0.82, depthTest: true, depthWrite: false }), []);
+  const pathMaterial = useMemo(() => {
+    const material = new MeshBasicMaterial({ transparent: true, opacity: 0.82, depthTest: true, depthWrite: false });
+    const trajectoryUniforms: TrajectoryUniforms = {
+      currentDistance: { value: 0 },
+      dashLength: { value: trajectoryDashLength },
+      dashPeriod: { value: trajectoryDashLength + trajectoryDashGap },
+    };
+    material.userData.trajectoryUniforms = trajectoryUniforms;
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.trajectoryCurrentDistance = trajectoryUniforms.currentDistance;
+      shader.uniforms.trajectoryDashLength = trajectoryUniforms.dashLength;
+      shader.uniforms.trajectoryDashPeriod = trajectoryUniforms.dashPeriod;
+      shader.vertexShader = shader.vertexShader
+        .replace("#include <common>", "#include <common>\nattribute float pathDistance;\nvarying float vPathDistance;")
+        .replace("#include <begin_vertex>", "#include <begin_vertex>\nvPathDistance = pathDistance;");
+      shader.fragmentShader = shader.fragmentShader
+        .replace("#include <common>", "#include <common>\nvarying float vPathDistance;\nuniform float trajectoryCurrentDistance;\nuniform float trajectoryDashLength;\nuniform float trajectoryDashPeriod;")
+        .replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>
+          if (vPathDistance > trajectoryCurrentDistance
+            && mod(vPathDistance - trajectoryCurrentDistance, trajectoryDashPeriod) > trajectoryDashLength) discard;`);
+    };
+    material.customProgramCacheKey = () => "earthview-orbit-past-future-tube-v1";
+    return material;
+  }, []);
   const [path, setPath] = useState<{ id: string; positions: Float32Array } | null>(null);
   const selectedIndex = useMemo(() => satellites.findIndex((satellite) => satellite.id === selectedId), [satellites, selectedId]);
   const hoveredIndex = useMemo(() => satellites.findIndex((satellite) => satellite.id === hoveredId), [satellites, hoveredId]);
   const issIndex = useMemo(() => satellites.findIndex(isInternationalSpaceStation), [satellites]);
-  const pathGeometry = useMemo(() => path && path.id === selectedId ? (() => {
-    const points = Array.from({ length: path.positions.length / 3 }, (_, index) => new Vector3(
-      path.positions[index * 3], path.positions[index * 3 + 1], path.positions[index * 3 + 2],
-    ));
-    return new TubeGeometry(new CatmullRomCurve3(points, true), points.length * 2, 0.0028, 5, true);
-  })() : null, [path, selectedId]);
+  const pathGeometry = useMemo(() => path && path.id === selectedId ? createTrajectoryGeometry(path.positions) : null, [path, selectedId]);
 
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
   useEffect(() => { selectedIndexRef.current = selectedIndex; }, [selectedIndex]);
@@ -214,7 +351,7 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
   useEffect(() => () => hoverMaterial.dispose(), [hoverMaterial]);
   useEffect(() => () => issMaterial.dispose(), [issMaterial]);
   useEffect(() => () => pathMaterial.dispose(), [pathMaterial]);
-  useEffect(() => () => pathGeometry?.dispose(), [pathGeometry]);
+  useEffect(() => () => pathGeometry?.geometry.dispose(), [pathGeometry]);
 
   useEffect(() => {
     if (satellites.length === 0) return;
@@ -463,6 +600,7 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
       onScreenRef.current(null);
       return;
     }
+    if (pathGeometry) updateTrajectoryAnchor(pathGeometry, x, y, z, pathMaterial);
     onScreenRef.current({ x: (projected.x + 1) * size.width * 0.5, y: (1 - projected.y) * size.height * 0.5, width: size.width, height: size.height });
   });
 
@@ -471,6 +609,6 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
     {issIndex >= 0 ? <points geometry={issGeometry} material={issMaterial} frustumCulled={false} raycast={() => null} renderOrder={2.2} /> : null}
     {hoveredId && hoveredId !== selectedId ? <points geometry={hoverGeometry} material={hoverMaterial} frustumCulled={false} raycast={() => null} renderOrder={2.5} /> : null}
     {selectedId ? <points geometry={selectedGeometry} material={selectedMaterial} frustumCulled={false} raycast={() => null} renderOrder={4} /> : null}
-    {selectedId && pathGeometry ? <mesh geometry={pathGeometry} material={pathMaterial} frustumCulled={false} raycast={() => null} renderOrder={3} /> : null}
+    {selectedId && pathGeometry ? <mesh geometry={pathGeometry.geometry} material={pathMaterial} frustumCulled={false} raycast={() => null} renderOrder={3} /> : null}
   </group>;
 }
