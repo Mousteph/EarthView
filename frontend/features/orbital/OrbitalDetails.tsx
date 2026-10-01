@@ -26,8 +26,7 @@ export function OrbitalDetails({ event: satellite, mode, position, detailsRef, o
   const sections: readonly [string, readonly (readonly [string, string | null | undefined])[]][] = [
     ["Identity", [["NORAD ID", String(satellite.noradId)], ["International designator", satellite.internationalDesignator], ["Object type", satellite.objectType], ["Mission type", mode === "active" ? satellite.missionType : null], ["Constellation / group", mode === "active" ? satellite.constellation : null]]],
     ["Ownership", [["Owner / source", satellite.owner], ["Launch date", satellite.launchDate], ["Launch site", satellite.launchSite]]],
-    ["Orbit", [["Orbit class", satellite.orbitClass], ["Altitude", position ? `${position.altitudeKm.toFixed(1)} km` : "Calculating"], [satellite.apsidesEstimated ? "Apogee (est.)" : "Apogee", satellite.apogeeKm == null ? null : `${satellite.apogeeKm.toFixed(1)} km`], [satellite.apsidesEstimated ? "Perigee (est.)" : "Perigee", satellite.perigeeKm == null ? null : `${satellite.perigeeKm.toFixed(1)} km`], ["Inclination", `${satellite.inclination.toFixed(2)}°`], ["Period", `${(satellite.orbitalPeriodMinutes ?? 1440 / satellite.meanMotion).toFixed(1)} min`], ["Orbits per day", (satellite.orbitsPerDay ?? satellite.meanMotion).toFixed(2)], ["Velocity", position ? `${position.velocityKmS.toFixed(2)} km/s` : "Calculating"]]],
-    ["Position", [["Latitude / longitude", position ? formatCoordinates(position.latitude, position.longitude) : "Calculating"]]],
+    ["Orbit", [["Orbit class", satellite.orbitClass], [satellite.apsidesEstimated ? "Apogee (est.)" : "Apogee", satellite.apogeeKm == null ? null : `${satellite.apogeeKm.toFixed(1)} km`], [satellite.apsidesEstimated ? "Perigee (est.)" : "Perigee", satellite.perigeeKm == null ? null : `${satellite.perigeeKm.toFixed(1)} km`], ["Inclination", `${satellite.inclination.toFixed(2)}°`], ["Period", `${(satellite.orbitalPeriodMinutes ?? 1440 / satellite.meanMotion).toFixed(1)} min`], ["Orbits per day", (satellite.orbitsPerDay ?? satellite.meanMotion).toFixed(2)]]],
   ];
 
   return <InspectionPanel ariaLabel={`Selected ${objectLabel.toLowerCase()}`} closeLabel={`Close selected ${objectLabel.toLowerCase()}`} detailsRef={detailsRef} onClose={onClose}>
@@ -43,21 +42,19 @@ export function OrbitalDetails({ event: satellite, mode, position, detailsRef, o
         {operational !== null ? <span className={`orbital-status-pill ${operational ? "is-active" : "is-inactive"}`}><i aria-hidden="true" />{operational ? "Active" : "Inactive"}</span> : null}
       </div>
     </div>
-    {isISS ? <div className="orbital-detail-section iss-telemetry-section">
+    <div className="orbital-detail-section orbital-live-position-section">
       <h3>Live Position</h3>
       <dl>
-        <div className="iss-coordinate-row"><dt>Latitude / longitude</dt><dd>{position ? formatCoordinates(position.latitude, position.longitude) : "Calculating"}</dd></div>
+        <div className="live-coordinate-row"><dt>Latitude / longitude</dt><dd>{position ? formatCoordinates(position.latitude, position.longitude) : "Calculating"}</dd></div>
         <div><dt>Altitude</dt><dd>{position ? `${position.altitudeKm.toFixed(1)} km` : "Calculating"}</dd></div>
         <div><dt>Velocity</dt><dd>{position ? `${position.velocityKmS.toFixed(2)} km/s` : "Calculating"}</dd></div>
       </dl>
-    </div> : null}
+    </div>
     {isISS ? <ISSLiveSection visible={issPlayerVisible} detached={issPlayerDetached} unavailable={issVideoUnavailable}
       inlineHostRef={onInlinePlayerHost} onDetach={onDetachISSPlayer}
       onRetry={onRetryISSPlayer} onShow={onShowISSPlayer} /> : null}
     {sections.map(([title, rows]) => {
-      if (isISS && title === "Position") return null;
-      const availableRows = rows.filter(([label, value]) => value != null && value !== ""
-        && !(isISS && (label === "Altitude" || label === "Velocity")));
+      const availableRows = rows.filter(([, value]) => value != null && value !== "");
       return availableRows.length ? <div className="orbital-detail-section" key={title}>
         <h3>{title}</h3><dl>{availableRows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
       </div> : null;

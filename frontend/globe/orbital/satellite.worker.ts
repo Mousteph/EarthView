@@ -1,5 +1,5 @@
 import { eciToGeodetic, gstime, json2satrec, propagate, type SatRec } from "satellite.js";
-import { buildOrbitPath, EARTH_RADIUS_KM, orbitPeriodMinutes, SNAPSHOT_INTERVAL_MS } from "./satelliteMath";
+import { buildCenteredOrbitPath, EARTH_RADIUS_KM, orbitPeriodMinutes, SNAPSHOT_INTERVAL_MS, writeEciToGlobe } from "./satelliteMath";
 import type { OrbitalElements, SatelliteWorkerInput, SatelliteWorkerOutput } from "./satelliteProtocol";
 
 type OrbitRecord = { satellite: OrbitalElements; satrec: SatRec | null };
@@ -10,6 +10,11 @@ let snapshotTimer: ReturnType<typeof setInterval> | null = null;
 let selectedTimer: ReturnType<typeof setInterval> | null = null;
 let lastTrajectoryAt = 0;
 let lastSnapshotEndMs = 0;
+
+function hasValidOrbitRadius(position: { x: number; y: number; z: number }) {
+  const radius = Math.hypot(position.x, position.y, position.z);
+  return Number.isFinite(radius) && radius >= EARTH_RADIUS_KM && radius <= EARTH_RADIUS_KM * 100;
+}
 
 function makeSatrec(satellite: OrbitalElements) {
   try {
@@ -43,10 +48,7 @@ function orbitPosition(record: OrbitRecord, timeMs: number) {
   if (!record.satrec) return null;
   const state = propagate(record.satrec, new Date(timeMs));
   if (!state) return null;
-  const { x, y, z } = state.position;
-  const radius = Math.hypot(x, y, z);
-  if (!Number.isFinite(radius) || radius < EARTH_RADIUS_KM || radius > EARTH_RADIUS_KM * 100) return null;
-  return state;
+  return hasValidOrbitRadius(state.position) ? state : null;
 }
 
 function snapshot(timeMs: number) {
@@ -60,14 +62,10 @@ function snapshot(timeMs: number) {
     const satrec = records[index].satrec;
     if (!satrec) continue;
     const state = propagate(satrec, date);
-    if (!state) continue;
+    if (!state || !hasValidOrbitRadius(state.position)) continue;
     const { x, y, z } = state.position;
-    const radius = Math.hypot(x, y, z);
-    if (!Number.isFinite(radius) || radius < EARTH_RADIUS_KM || radius > EARTH_RADIUS_KM * 100) continue;
     const offset = index * 3;
-    positions[offset] = (-x * sine + y * cosine) / EARTH_RADIUS_KM;
-    positions[offset + 1] = z / EARTH_RADIUS_KM;
-    positions[offset + 2] = (x * cosine + y * sine) / EARTH_RADIUS_KM;
+    writeEciToGlobe(positions, offset, x, y, z, cosine, sine);
   }
 
   return positions;
@@ -90,7 +88,7 @@ function sendSnapshot(initializationMs?: number) {
 
 function trajectory(record: OrbitRecord, timeMs: number) {
   const period = orbitPeriodMinutes(record.satellite.meanMotion);
-  return buildOrbitPath(timeMs, period, gstime(new Date(timeMs)), (sampleTime) => orbitPosition(record, sampleTime)?.position ?? null);
+  return buildCenteredOrbitPath(timeMs, period, gstime(new Date(timeMs)), (sampleTime) => orbitPosition(record, sampleTime)?.position ?? null);
 }
 
 function sendSelected(forceTrajectory = false) {

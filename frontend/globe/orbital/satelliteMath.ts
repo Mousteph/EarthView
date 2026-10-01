@@ -1,8 +1,18 @@
 export const EARTH_RADIUS_KM = 6371;
 export const SNAPSHOT_INTERVAL_MS = 5000;
 
-export function earthFixedToGlobe(x: number, y: number, z: number) {
-  return [y / EARTH_RADIUS_KM, z / EARTH_RADIUS_KM, x / EARTH_RADIUS_KM] as const;
+export function writeEciToGlobe(
+  target: Float32Array,
+  offset: number,
+  x: number,
+  y: number,
+  z: number,
+  cosineGmst: number,
+  sineGmst: number,
+) {
+  target[offset] = (-x * sineGmst + y * cosineGmst) / EARTH_RADIUS_KM;
+  target[offset + 1] = z / EARTH_RADIUS_KM;
+  target[offset + 2] = (x * cosineGmst + y * sineGmst) / EARTH_RADIUS_KM;
 }
 
 export function snapshotAlpha(now: number, start: number, end: number) {
@@ -14,30 +24,28 @@ export function orbitPeriodMinutes(meanMotion: number) {
   return 1440 / meanMotion;
 }
 
-export function buildOrbitPath(
-  startMs: number,
+export function buildCenteredOrbitPath(
+  centerMs: number,
   periodMinutes: number,
   fixedGmst: number,
   positionAt: (timeMs: number) => { x: number; y: number; z: number } | null,
-  samples = 256,
+  samplesPerSide = 128,
 ) {
-  if (!Number.isFinite(periodMinutes) || periodMinutes <= 0 || samples < 3) return null;
-  const points = new Float32Array(samples * 3);
+  if (!Number.isFinite(periodMinutes) || periodMinutes <= 0 || !Number.isInteger(samplesPerSide) || samplesPerSide < 1) return null;
+  const sampleCount = samplesPerSide * 2 + 1;
+  const points = new Float32Array(sampleCount * 3);
   const cosine = Math.cos(fixedGmst);
   const sine = Math.sin(fixedGmst);
-  for (let index = 0; index < samples; index += 1) {
-    const position = positionAt(startMs + index * periodMinutes * 60_000 / samples);
+  const halfPeriodMs = periodMinutes * 30_000;
+
+  for (let index = 0; index < sampleCount; index += 1) {
+    const sampleTime = centerMs - halfPeriodMs + index * halfPeriodMs / samplesPerSide;
+    const position = positionAt(sampleTime);
     if (!position) return null;
     const offset = index * 3;
-    const [x, y, z] = earthFixedToGlobe(
-      position.x * cosine + position.y * sine,
-      -position.x * sine + position.y * cosine,
-      position.z,
-    );
-    points[offset] = x;
-    points[offset + 1] = y;
-    points[offset + 2] = z;
+    writeEciToGlobe(points, offset, position.x, position.y, position.z, cosine, sine);
   }
+
   return points;
 }
 
