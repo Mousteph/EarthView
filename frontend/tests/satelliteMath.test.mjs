@@ -2,18 +2,22 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildCenteredOrbitPath,
-  buildOrbitPath,
   EARTH_RADIUS_KM,
-  earthFixedToGlobe,
   orbitPeriodMinutes,
   segmentHiddenByEarth,
   snapshotAlpha,
+  writeEciToGlobe,
 } from "../globe/orbital/satelliteMath.ts";
 
-test("maps Earth-fixed coordinates to the globe axes", () => {
-  assert.deepEqual(earthFixedToGlobe(EARTH_RADIUS_KM, 0, 0), [0, 0, 1]);
-  assert.deepEqual(earthFixedToGlobe(0, EARTH_RADIUS_KM, 0), [1, 0, 0]);
-  assert.deepEqual(earthFixedToGlobe(0, 0, EARTH_RADIUS_KM), [0, 1, 0]);
+test("maps inertial coordinates with the fixed Earth rotation", () => {
+  const target = new Float32Array(9);
+  writeEciToGlobe(target, 0, EARTH_RADIUS_KM, 0, 0, 1, 0);
+  writeEciToGlobe(target, 3, 0, EARTH_RADIUS_KM, 0, 1, 0);
+  writeEciToGlobe(target, 6, 0, 0, EARTH_RADIUS_KM, 1, 0);
+  assert.deepEqual(Array.from(target), [0, 0, 1, 1, 0, 0, 0, 1, 0]);
+
+  writeEciToGlobe(target, 0, EARTH_RADIUS_KM, 0, 0, 0, 1);
+  assert.deepEqual(Array.from(target.slice(0, 3)), [-1, 0, 0]);
 });
 
 test("clamps interpolation to the five-second snapshot interval", () => {
@@ -26,21 +30,6 @@ test("rejects a satellite hidden by Earth from camera view", () => {
   assert.equal(segmentHiddenByEarth(0, 0, 4, 0, 0, -2), true);
   assert.equal(segmentHiddenByEarth(0, 0, 4, 0, 0, 2), false);
   assert.equal(segmentHiddenByEarth(0, 0, 4, 4, 0, 0), false);
-});
-
-test("samples one local orbit in a fixed Earth orientation", () => {
-  const period = orbitPeriodMinutes(15);
-  assert.equal(period, 96);
-  const radius = 7000;
-  const path = buildOrbitPath(0, period, 0, (timeMs) => {
-    const angle = timeMs / (period * 60_000) * 2 * Math.PI;
-    return { x: radius * Math.cos(angle), y: radius * Math.sin(angle), z: 0 };
-  }, 4);
-  assert.ok(path);
-  assert.equal(path.length, 12);
-  assert.ok(Math.abs(path[2] - radius / EARTH_RADIUS_KM) < 1e-6);
-  assert.ok(Math.abs(path[3] - radius / EARTH_RADIUS_KM) < 1e-6);
-  assert.equal(buildOrbitPath(0, period, 0, () => null), null);
 });
 
 test("samples equal past and future spans around the exact center time", () => {

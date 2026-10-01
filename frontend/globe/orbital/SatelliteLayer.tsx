@@ -122,6 +122,10 @@ function setGeometryPositions(geometry: BufferGeometry, first: Float32Array, sec
   future.needsUpdate = true;
 }
 
+function hasValidGlobePosition(x: number, y: number, z: number) {
+  return x * x + y * y + z * z >= 0.5;
+}
+
 function createTrajectoryGeometry(positions: Float32Array): TrajectoryGeometry | null {
   const pointCount = positions.length / 3;
   if (pointCount < 3 || pointCount % 2 !== 1) return null;
@@ -297,10 +301,12 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
   useEffect(() => { onHoverEndRef.current = onHoverEnd; }, [onHoverEnd]);
   useEffect(() => { onDataRef.current = onSelectedData; }, [onSelectedData]);
   useEffect(() => { onScreenRef.current = onSelectedPositionChange; }, [onSelectedPositionChange]);
-  useEffect(() => { markerMaterialRef.current = material; }, [material]);
-  useEffect(() => { highlightMaterialRef.current = selectedMaterial; }, [selectedMaterial]);
-  useEffect(() => { hoverMaterialRef.current = hoverMaterial; }, [hoverMaterial]);
-  useEffect(() => { issMaterialRef.current = issMaterial; }, [issMaterial]);
+  useEffect(() => {
+    markerMaterialRef.current = material;
+    highlightMaterialRef.current = selectedMaterial;
+    hoverMaterialRef.current = hoverMaterial;
+    issMaterialRef.current = issMaterial;
+  }, [hoverMaterial, issMaterial, material, selectedMaterial]);
   useEffect(() => {
     const iss = issIndex >= 0 ? satellites[issIndex] : null;
     issMaterial.color.copy(iss ? colorForObject(iss) : new Color(readDesignColor(DESIGN_COLOR_TOKENS.satellite)));
@@ -465,8 +471,8 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
         for (let index = 0; index < satellites.length; index += 1) {
           if (visibility && !visibility[index]) continue;
           const offset = index * 3;
-          if (current.first[offset] ** 2 + current.first[offset + 1] ** 2 + current.first[offset + 2] ** 2 < 0.5
-            || current.second[offset] ** 2 + current.second[offset + 1] ** 2 + current.second[offset + 2] ** 2 < 0.5) continue;
+          if (!hasValidGlobePosition(current.first[offset], current.first[offset + 1], current.first[offset + 2])
+            || !hasValidGlobePosition(current.second[offset], current.second[offset + 1], current.second[offset + 2])) continue;
           startProjected.set(current.first[offset], current.first[offset + 1], current.first[offset + 2]).applyMatrix4(group.current.matrixWorld).project(camera);
           endProjected.set(current.second[offset], current.second[offset + 1], current.second[offset + 2]).applyMatrix4(group.current.matrixWorld).project(camera);
           if ((startProjected.z < -1 && endProjected.z < -1) || (startProjected.z > 1 && endProjected.z > 1)) continue;
@@ -496,7 +502,7 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
         const x = first[offset] + (second[offset] - first[offset]) * blend;
         const y = first[offset + 1] + (second[offset + 1] - first[offset + 1]) * blend;
         const z = first[offset + 2] + (second[offset + 2] - first[offset + 2]) * blend;
-        if (x * x + y * y + z * z < 0.5) continue;
+        if (!hasValidGlobePosition(x, y, z)) continue;
         projected.set(x, y, z).applyMatrix4(group.current.matrixWorld);
         if (segmentHiddenByEarth(cameraPosition.x, cameraPosition.y, cameraPosition.z, projected.x, projected.y, projected.z)) continue;
         const depth = projected.distanceToSquared(cameraPosition);
@@ -574,17 +580,15 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
     const index = selectedIndexRef.current;
     if (index < 0) return;
     const offset = index * 3;
-    if (
-      current.first[offset] ** 2 + current.first[offset + 1] ** 2 + current.first[offset + 2] ** 2 < 0.5
-      || current.second[offset] ** 2 + current.second[offset + 1] ** 2 + current.second[offset + 2] ** 2 < 0.5
-    ) {
+    if (!hasValidGlobePosition(current.first[offset], current.first[offset + 1], current.first[offset + 2])
+      || !hasValidGlobePosition(current.second[offset], current.second[offset + 1], current.second[offset + 2])) {
       onScreenRef.current(null);
       return;
     }
     const x = current.first[offset] + (current.second[offset] - current.first[offset]) * blend;
     const y = current.first[offset + 1] + (current.second[offset + 1] - current.first[offset + 1]) * blend;
     const z = current.first[offset + 2] + (current.second[offset + 2] - current.first[offset + 2]) * blend;
-    if (x * x + y * y + z * z < 0.5) {
+    if (!hasValidGlobePosition(x, y, z)) {
       onScreenRef.current(null);
       return;
     }
