@@ -1,7 +1,7 @@
 "use client";
 
 import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { LineBasicMaterial, MeshBasicMaterial, type Texture } from "three";
 import { DESIGN_COLOR_TOKENS, readDesignColor } from "@/shared/designTokens";
 import { CountryBorders } from "./CountryBorders";
@@ -15,19 +15,25 @@ import {
 import { Land } from "./Land";
 import { Lakes } from "./Lakes";
 import { createReliefMaterial } from "../relief/relief";
+import type { EarthViewId } from "../earthViews";
+import { SurfaceLand } from "../earthViews/surface/SurfaceLand";
 
 type GeographicLayersProps = {
   readonly onActiveLodChange: (lod: GeographicLod) => void;
   readonly reliefTexture: Texture;
+  readonly earthView: EarthViewId;
 };
 
 type GeographyGeometries = ReturnType<typeof createGeographyGeometries>;
 
-export function GeographicLayers({ onActiveLodChange, reliefTexture }: GeographicLayersProps) {
+export function GeographicLayers({ onActiveLodChange, reliefTexture, earthView }: GeographicLayersProps) {
   const camera = useThree((state) => state.camera);
   const invalidate = useThree((state) => state.invalidate);
   const [requestedLod, setRequestedLod] = useState<GeographicLod>("50m");
   const [geometries, setGeometries] = useState<GeographyGeometries | null>(null);
+  const geometriesByLod = useRef(new Map<GeographicLod, GeographyGeometries>());
+  const prefetchedCloseLod = useRef(false);
+  const isMounted = useRef(false);
   const landMaterial = useMemo(() => createReliefMaterial(reliefTexture, "land"), [reliefTexture]);
   const lakeMaterial = useMemo(() => new MeshBasicMaterial(), []);
   const borderMaterial = useMemo(() => {
@@ -63,6 +69,25 @@ export function GeographicLayers({ onActiveLodChange, reliefTexture }: Geographi
   useFrame(() => {
     const distance = camera.position.length();
 
+    // Surface detail comes from the 1:10m raster. Keep the lighter vector
+    // geometry in place while zooming so Surface never pays for the 10m LOD swap.
+    if (earthView === "surface") {
+      if (requestedLod !== "50m") setRequestedLod("50m");
+      return;
+    }
+
+    if (!prefetchedCloseLod.current && distance < 3.5) {
+      prefetchedCloseLod.current = true;
+      void loadPreparedGeography("10m")
+        .then((prepared) => {
+          if (!isMounted.current || geometriesByLod.current.has("10m")) return;
+          geometriesByLod.current.set("10m", createGeographyGeometries(prepared));
+        })
+        .catch(() => {
+          prefetchedCloseLod.current = false;
+        });
+    }
+
     if (requestedLod === "50m" && distance < GEOGRAPHY_LOD_THRESHOLDS.enterCloseDistance) {
       setRequestedLod("10m");
     } else if (
@@ -72,6 +97,13 @@ export function GeographicLayers({ onActiveLodChange, reliefTexture }: Geographi
       setRequestedLod("50m");
     }
   });
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     landMaterial.color.set(readDesignColor(DESIGN_COLOR_TOKENS.land));
@@ -85,7 +117,12 @@ export function GeographicLayers({ onActiveLodChange, reliefTexture }: Geographi
 
     loadPreparedGeography(requestedLod).then((prepared) => {
       if (!isCurrent) return;
-      setGeometries(createGeographyGeometries(prepared));
+      let nextGeometries = geometriesByLod.current.get(requestedLod);
+      if (!nextGeometries) {
+        nextGeometries = createGeographyGeometries(prepared);
+        geometriesByLod.current.set(requestedLod, nextGeometries);
+      }
+      setGeometries(nextGeometries);
       onActiveLodChange(requestedLod);
       invalidate();
       scheduledFrame = requestAnimationFrame(() => invalidate());
@@ -97,15 +134,15 @@ export function GeographicLayers({ onActiveLodChange, reliefTexture }: Geographi
     };
   }, [invalidate, onActiveLodChange, requestedLod]);
 
-  useEffect(
-    () => () => {
-      geometries?.land.dispose();
-      geometries?.lakes.dispose();
-      geometries?.coastlines.dispose();
-      geometries?.borders.dispose();
-    },
-    [geometries],
-  );
+  useEffect(() => () => {
+    for (const cached of geometriesByLod.current.values()) {
+      cached.land.dispose();
+      cached.lakes.dispose();
+      cached.coastlines.dispose();
+      cached.borders.dispose();
+    }
+    geometriesByLod.current.clear();
+  }, []);
 
   useEffect(
     () => () => {
@@ -120,7 +157,11 @@ export function GeographicLayers({ onActiveLodChange, reliefTexture }: Geographi
 
   return (
     <>
-      <Land geometry={geometries.land} material={landMaterial} />
+      {earthView === "surface"
+        ? <Suspense fallback={<Land geometry={geometries.land} material={landMaterial} />}>
+          <SurfaceLand geometry={geometries.land} editorialMaterial={landMaterial} />
+        </Suspense>
+        : <Land geometry={geometries.land} material={landMaterial} />}
       <Lakes geometry={geometries.lakes} material={lakeMaterial} />
       <CountryBorders geometry={geometries.borders} material={borderMaterial} />
       <Coastlines geometry={geometries.coastlines} material={borderMaterial} />

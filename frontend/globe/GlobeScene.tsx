@@ -17,6 +17,7 @@ import { PipelineLayer } from "./pipelines/PipelineLayer";
 import { GeographicLayers } from "./geography/GeographicLayers";
 import type { GeographicLod } from "./geography/geography";
 import { RELIEF } from "./relief/relief";
+import type { EarthViewId } from "./earthViews";
 import { DESIGN_COLOR_TOKENS } from "@/shared/designTokens";
 import {
   PerformancePanel,
@@ -26,6 +27,7 @@ import {
 } from "./debug/PerformanceDebug";
 
 type GlobeSceneProps = {
+  readonly earthView: EarthViewId;
   readonly autoRotate: boolean;
   readonly earthquakes: readonly Earthquake[];
   readonly earthquakesVisible: boolean;
@@ -68,7 +70,10 @@ function RenderScheduler({ active }: { active: boolean }) {
   return null;
 }
 
-function ReliefSurface({ onActiveLodChange }: { readonly onActiveLodChange: (lod: GeographicLod) => void }) {
+function ReliefSurface({ earthView, onActiveLodChange }: {
+  readonly earthView: EarthViewId;
+  readonly onActiveLodChange: (lod: GeographicLod) => void;
+}) {
   const renderer = useThree((state) => state.gl);
   const texture = useLoader(
     KTX2Loader,
@@ -79,7 +84,7 @@ function ReliefSurface({ onActiveLodChange }: { readonly onActiveLodChange: (lod
   return (
     <>
       <Earth reliefTexture={texture} />
-      <GeographicLayers reliefTexture={texture} onActiveLodChange={onActiveLodChange} />
+      <GeographicLayers reliefTexture={texture} earthView={earthView} onActiveLodChange={onActiveLodChange} />
     </>
   );
 }
@@ -127,6 +132,7 @@ function GlobeControls({
 }
 
 function GlobeSceneComponent({
+  earthView,
   autoRotate,
   earthquakes,
   earthquakesVisible,
@@ -167,7 +173,7 @@ function GlobeSceneComponent({
       >
         <group rotation={[0, -0.1, 0]}>
           <Suspense fallback={null}>
-            <ReliefSurface onActiveLodChange={handleActiveLodChange} />
+            <ReliefSurface earthView={earthView} onActiveLodChange={handleActiveLodChange} />
           </Suspense>
           <PipelineLayer pipelines={pipelines} visible={pipelinesVisible} selectedId={selectedPipelineId} hoveredId={hovered?.type === "pipelines" ? hovered.id : null} onSelect={onPipelineSelect} onHover={onHover} onHoverEnd={onHoverEnd} />
           <PointLayer

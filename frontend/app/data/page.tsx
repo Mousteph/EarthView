@@ -4,7 +4,7 @@ import { EarthViewHeader } from "@/shared/ui/EarthViewHeader";
 
 export const metadata: Metadata = {
   title: "Data Sources | EarthView",
-  description: "Sources for EarthView's earthquake, fire, pipeline, geography, and relief data.",
+  description: "Sources for EarthView's live data, geography, relief, and Surface Earth View.",
 };
 
 const sources = [
@@ -70,6 +70,15 @@ const sources = [
     description: "EarthView derives its local land and seafloor slope-shading texture from the GEBCO_2026 Grid at 15 arc-second intervals. GEBCO does not endorse EarthView; the grid is not suitable for navigation or safety at sea.",
     href: "https://doi.org/10.5285/4f68d5c7-45eb-f999-e063-7086abc036fa",
     linkLabel: "View GEBCO_2026 Grid citation",
+  },
+  {
+    number: "08",
+    category: "Earth Views",
+    title: "Surface land appearance",
+    provider: "Natural Earth",
+    description: "The Surface view uses Cross-Blended Hypsometric Tints, Natural Earth raster version 3.2.0 at 1:10m resolution (21,600×10,800). The no-relief large raster is resampled with area averaging to 4,096×2,048 and stored as mipmapped UASTC KTX2. Natural Earth data is public domain; the globe keeps its GEBCO terrain shading and vector coastlines, lakes, islands, and borders.",
+    href: "https://www.naturalearthdata.com/downloads/10m-raster-data/10m-cross-blend-hypso/",
+    linkLabel: "View Natural Earth Cross-Blended Hypsometric Tints",
   },
 ] as const;
 
