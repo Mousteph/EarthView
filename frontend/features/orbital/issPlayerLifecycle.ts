@@ -23,13 +23,16 @@ export const initialISSPlayerLifecycle: ISSPlayerLifecycle = {
 
 export function issPlayerLifecycleReducer(state: ISSPlayerLifecycle, action: ISSPlayerAction): ISSPlayerLifecycle {
   switch (action.type) {
-    case "selection":
+    case "selection": {
+      const isEnteringISSSelection = action.isISSSelected && !state.isISSSelected;
+      const isLeavingInlineISSPlayer = !action.isISSSelected && !state.detached;
       return {
         ...state,
         isISSSelected: action.isISSSelected,
-        dismissed: (action.isISSSelected && !state.isISSSelected) || (!action.isISSSelected && !state.detached) ? false : state.dismissed,
-        unavailable: !action.isISSSelected && !state.detached ? false : state.unavailable,
+        dismissed: isEnteringISSSelection || isLeavingInlineISSPlayer ? false : state.dismissed,
+        unavailable: isLeavingInlineISSPlayer ? false : state.unavailable,
       };
+    }
     case "detach":
       return state.isISSSelected && !state.dismissed ? { ...state, detached: true } : state;
     case "dock":
