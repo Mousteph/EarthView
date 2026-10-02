@@ -8,25 +8,24 @@ import { CountryBorders } from "./CountryBorders";
 import { Coastlines } from "./Coastlines";
 import {
   createGeographyGeometries,
-  GEOGRAPHY_LOD_THRESHOLDS,
   loadPreparedGeography,
+  nextGeographicLod,
   type GeographicLod,
 } from "./geography";
 import { Land } from "./Land";
 import { Lakes } from "./Lakes";
 import { createReliefMaterial } from "../relief/relief";
-import type { EarthViewId } from "../earthViews";
-import { SurfaceLand } from "../earthViews/surface/SurfaceLand";
+import { SurfaceLand } from "../surface/SurfaceLand";
 
 type GeographicLayersProps = {
   readonly onActiveLodChange: (lod: GeographicLod) => void;
   readonly reliefTexture: Texture;
-  readonly earthView: EarthViewId;
+  readonly surfaceVisible: boolean;
 };
 
 type GeographyGeometries = ReturnType<typeof createGeographyGeometries>;
 
-export function GeographicLayers({ onActiveLodChange, reliefTexture, earthView }: GeographicLayersProps) {
+export function GeographicLayers({ onActiveLodChange, reliefTexture, surfaceVisible }: GeographicLayersProps) {
   const camera = useThree((state) => state.camera);
   const invalidate = useThree((state) => state.invalidate);
   const [requestedLod, setRequestedLod] = useState<GeographicLod>("50m");
@@ -69,14 +68,7 @@ export function GeographicLayers({ onActiveLodChange, reliefTexture, earthView }
   useFrame(() => {
     const distance = camera.position.length();
 
-    // Surface detail comes from the 1:10m raster. Keep the lighter vector
-    // geometry in place while zooming so Surface never pays for the 10m LOD swap.
-    if (earthView === "surface") {
-      if (requestedLod !== "50m") setRequestedLod("50m");
-      return;
-    }
-
-    if (!prefetchedCloseLod.current && distance < 3.5) {
+    if (!surfaceVisible && !prefetchedCloseLod.current && distance < 3.5) {
       prefetchedCloseLod.current = true;
       void loadPreparedGeography("10m")
         .then((prepared) => {
@@ -88,14 +80,8 @@ export function GeographicLayers({ onActiveLodChange, reliefTexture, earthView }
         });
     }
 
-    if (requestedLod === "50m" && distance < GEOGRAPHY_LOD_THRESHOLDS.enterCloseDistance) {
-      setRequestedLod("10m");
-    } else if (
-      requestedLod === "10m"
-      && distance > GEOGRAPHY_LOD_THRESHOLDS.exitCloseDistance
-    ) {
-      setRequestedLod("50m");
-    }
+    const nextLod = nextGeographicLod(requestedLod, distance, surfaceVisible);
+    if (nextLod !== requestedLod) setRequestedLod(nextLod);
   });
 
   useEffect(() => {
@@ -157,9 +143,9 @@ export function GeographicLayers({ onActiveLodChange, reliefTexture, earthView }
 
   return (
     <>
-      {earthView === "surface"
+      {surfaceVisible
         ? <Suspense fallback={<Land geometry={geometries.land} material={landMaterial} />}>
-          <SurfaceLand geometry={geometries.land} editorialMaterial={landMaterial} />
+          <SurfaceLand geometry={geometries.land} baseLandMaterial={landMaterial} />
         </Suspense>
         : <Land geometry={geometries.land} material={landMaterial} />}
       <Lakes geometry={geometries.lakes} material={lakeMaterial} />

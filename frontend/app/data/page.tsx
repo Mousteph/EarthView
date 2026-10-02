@@ -4,7 +4,7 @@ import { EarthViewHeader } from "@/shared/ui/EarthViewHeader";
 
 export const metadata: Metadata = {
   title: "Data Sources | EarthView",
-  description: "Sources for EarthView's live data, geography, relief, and Surface Earth View.",
+  description: "Sources for EarthView's live data, geography, relief, and globe overlays.",
 };
 
 const sources = [
@@ -73,12 +73,21 @@ const sources = [
   },
   {
     number: "08",
-    category: "Earth Views",
+    category: "Globe overlays",
     title: "Surface land appearance",
     provider: "Natural Earth",
-    description: "The Surface view uses Cross-Blended Hypsometric Tints, Natural Earth raster version 3.2.0 at 1:10m resolution (21,600×10,800). The no-relief large raster is resampled with area averaging to 4,096×2,048 and stored as mipmapped UASTC KTX2. Natural Earth data is public domain; the globe keeps its GEBCO terrain shading and vector coastlines, lakes, islands, and borders.",
+    description: "The Surface layer uses Natural Earth Cross-Blended Hypsometric Tints, raster version 3.2.0 at 1:10m resolution. Its no-relief raster is resampled to a mipmapped texture; GEBCO relief and Natural Earth vector geography remain separate. Natural Earth data is public domain.",
     href: "https://www.naturalearthdata.com/downloads/10m-raster-data/10m-cross-blend-hypso/",
     linkLabel: "View Natural Earth Cross-Blended Hypsometric Tints",
+  },
+  {
+    number: "09",
+    category: "Globe overlays",
+    title: "Country and city labels",
+    provider: "Natural Earth",
+    description: "Country names use bundled Natural Earth Admin-0 label coordinates. City names and adaptive zoom ranks come from Natural Earth 1:10m Populated Places version 5.1.2. Natural Earth data is public domain; optional credit is “Made with Natural Earth.”",
+    href: "https://www.naturalearthdata.com/about/terms-of-use/",
+    linkLabel: "View Natural Earth data and terms",
   },
 ] as const;
 

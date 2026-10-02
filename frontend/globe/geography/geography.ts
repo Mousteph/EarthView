@@ -34,6 +34,17 @@ export const GEOGRAPHY_LOD_THRESHOLDS = {
   exitCloseDistance: 2.45,
 } as const;
 
+export function nextGeographicLod(
+  current: GeographicLod,
+  cameraDistance: number,
+  surfaceVisible: boolean,
+): GeographicLod {
+  if (surfaceVisible) return "50m";
+  if (current === "50m" && cameraDistance < GEOGRAPHY_LOD_THRESHOLDS.enterCloseDistance) return "10m";
+  if (current === "10m" && cameraDistance > GEOGRAPHY_LOD_THRESHOLDS.exitCloseDistance) return "50m";
+  return current;
+}
+
 const geographyPaths: Record<GeographicLod, GeographyAssetPaths> = {
   "50m": {
     land: ["/data/natural-earth/ne_50m_land.geojson"],

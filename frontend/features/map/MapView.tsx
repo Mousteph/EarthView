@@ -9,8 +9,7 @@ import { useGlobeHover } from "./useGlobeHover";
 import { useMapState } from "./useMapState";
 import { useMapLayers } from "./useMapLayers";
 import { GlobeScene, type MapScale } from "@/globe/GlobeScene";
-import { type EarthViewId } from "@/globe/earthViews";
-import { EarthViewSelector } from "./EarthViewSelector";
+import { VisualLayerToggles } from "./VisualLayerToggles";
 import type { SelectedPointScreenPosition } from "@/globe/points/PointLayer";
 import { isInternationalSpaceStation, type OrbitalMode, type SelectedSatellitePosition } from "@/features/orbital/model";
 import { ISSLivePlayerHost } from "@/features/orbital/ISSLivePlayerHost";
@@ -21,11 +20,11 @@ import { orbitalVisibilityMask } from "@/features/orbital/filters";
 import { orbitalObjectColor } from "@/features/orbital/colors";
 
 export function MapView() {
-  const [earthView, setEarthView] = useState<EarthViewId>("editorial");
   const [hasInteracted, setHasInteracted] = useState(false);
   const markInteracted = useCallback(() => setHasInteracted(true), []);
-  const { earthquakesVisible, firesVisible, enabledOrbitalModes, enabledPipelineFuels, pipelineStatusFilters, orbitalFilters, selection,
+  const { earthquakesVisible, firesVisible, visualLayers, enabledOrbitalModes, enabledPipelineFuels, pipelineStatusFilters, orbitalFilters, selection,
     toggleEarthquakes: toggleEarthquakesState, toggleFires: toggleFiresState, toggleOrbitalMode,
+    toggleVisualLayer,
     togglePipelineFuel: togglePipelineFuelState, changePipelineStatusFilters, reconcilePipelineStatusFilters: reconcilePipelineStatusFilterState,
     changeOrbitalFilter, select, clearSelection, reconcileSelection } = useMapState();
   const satellitesVisible = enabledOrbitalModes.length > 0;
@@ -216,7 +215,8 @@ export function MapView() {
       <div className="stage-title stage-title-left" aria-hidden="true">View<span>.</span></div>
       <div className="globe-canvas" ref={globeCanvasRef} onPointerEnter={handlePointerEnter} onPointerLeave={clearHover}>
         <GlobeScene
-          earthView={earthView}
+          labelsVisible={visualLayers.labels}
+          surfaceVisible={visualLayers.surface}
           autoRotate={!hasInteracted}
           earthquakes={earthquakes}
           earthquakesVisible={earthquakesVisible}
@@ -243,7 +243,7 @@ export function MapView() {
           onHoverEnd={handleHoverEnd}
         />
       </div>
-      <EarthViewSelector active={earthView} onChange={setEarthView} />
+      <VisualLayerToggles visible={visualLayers} onToggle={toggleVisualLayer} />
       <svg className="event-connector" ref={connectorRef} aria-hidden="true">
         <path ref={connectorPathRef} />
         <circle ref={connectorRingRef} r="13" />

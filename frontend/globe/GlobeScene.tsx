@@ -1,10 +1,9 @@
 "use client";
 
 import { OrbitControls } from "@react-three/drei";
-import { Canvas, useFrame, useLoader } from "@react-three/fiber";
-import { memo, Suspense, useCallback, useEffect, useState } from "react";
+import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
+import { memo, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { KTX2Loader } from "three-stdlib";
-import { useThree } from "@react-three/fiber";
 import type { Earthquake } from "@/features/earthquakes/model";
 import type { Fire } from "@/features/fires/model";
 import type { OrbitalObject, SelectedSatellitePosition } from "@/features/orbital/model";
@@ -17,8 +16,9 @@ import { PipelineLayer } from "./pipelines/PipelineLayer";
 import { GeographicLayers } from "./geography/GeographicLayers";
 import type { GeographicLod } from "./geography/geography";
 import { RELIEF } from "./relief/relief";
-import type { EarthViewId } from "./earthViews";
 import { DESIGN_COLOR_TOKENS } from "@/shared/designTokens";
+import { GeographicLabels } from "./labels/GeographicLabels";
+import type { Group } from "three";
 import {
   PerformancePanel,
   PerformanceProbe,
@@ -27,7 +27,8 @@ import {
 } from "./debug/PerformanceDebug";
 
 type GlobeSceneProps = {
-  readonly earthView: EarthViewId;
+  readonly labelsVisible: boolean;
+  readonly surfaceVisible: boolean;
   readonly autoRotate: boolean;
   readonly earthquakes: readonly Earthquake[];
   readonly earthquakesVisible: boolean;
@@ -70,8 +71,8 @@ function RenderScheduler({ active }: { active: boolean }) {
   return null;
 }
 
-function ReliefSurface({ earthView, onActiveLodChange }: {
-  readonly earthView: EarthViewId;
+function ReliefSurface({ surfaceVisible, onActiveLodChange }: {
+  readonly surfaceVisible: boolean;
   readonly onActiveLodChange: (lod: GeographicLod) => void;
 }) {
   const renderer = useThree((state) => state.gl);
@@ -84,7 +85,7 @@ function ReliefSurface({ earthView, onActiveLodChange }: {
   return (
     <>
       <Earth reliefTexture={texture} />
-      <GeographicLayers reliefTexture={texture} earthView={earthView} onActiveLodChange={onActiveLodChange} />
+      <GeographicLayers reliefTexture={texture} surfaceVisible={surfaceVisible} onActiveLodChange={onActiveLodChange} />
     </>
   );
 }
@@ -132,7 +133,8 @@ function GlobeControls({
 }
 
 function GlobeSceneComponent({
-  earthView,
+  labelsVisible,
+  surfaceVisible,
   autoRotate,
   earthquakes,
   earthquakesVisible,
@@ -161,6 +163,7 @@ function GlobeSceneComponent({
   const debugEnabled = usePerformanceDebugEnabled();
   const [performance, setPerformance] = useState<PerformanceSnapshot | null>(null);
   const [activeLod, setActiveLod] = useState<GeographicLod>("50m");
+  const globeGroup = useRef<Group>(null);
   const handleActiveLodChange = useCallback((lod: GeographicLod) => setActiveLod(lod), []);
 
   return (
@@ -171,10 +174,11 @@ function GlobeSceneComponent({
         frameloop="demand"
         gl={{ alpha: true, antialias: true, powerPreference: "high-performance" }}
       >
-        <group rotation={[0, -0.1, 0]}>
+        <group ref={globeGroup} rotation={[0, -0.1, 0]}>
           <Suspense fallback={null}>
-            <ReliefSurface earthView={earthView} onActiveLodChange={handleActiveLodChange} />
+            <ReliefSurface surfaceVisible={surfaceVisible} onActiveLodChange={handleActiveLodChange} />
           </Suspense>
+          <GeographicLabels visible={labelsVisible} globe={globeGroup} />
           <PipelineLayer pipelines={pipelines} visible={pipelinesVisible} selectedId={selectedPipelineId} hoveredId={hovered?.type === "pipelines" ? hovered.id : null} onSelect={onPipelineSelect} onHover={onHover} onHoverEnd={onHoverEnd} />
           <PointLayer
             entities={earthquakes}

@@ -1,7 +1,7 @@
 import { MeshStandardMaterial, type Texture } from "three";
 
 /**
- * Builds a land material for the Surface view while retaining the existing
+ * Builds a land material for the Surface layer while retaining the existing
  * GEBCO normal/shading shader. The source texture is equirectangular, with
  * north at the top and longitude 0 at the horizontal center.
  *
@@ -9,15 +9,15 @@ import { MeshStandardMaterial, type Texture } from "three";
  * view material is replaced. The input texture remains owned by its loader.
  */
 export function createSurfaceMaterial(
-  editorialMaterial: MeshStandardMaterial,
+  baseLandMaterial: MeshStandardMaterial,
   surfaceTexture: Texture,
 ) {
-  const material = editorialMaterial.clone();
+  const material = baseLandMaterial.clone();
   material.color.setRGB(1, 1, 1);
   material.map = null;
   material.needsUpdate = true;
 
-  const inheritedCompile = editorialMaterial.onBeforeCompile;
+  const inheritedCompile = baseLandMaterial.onBeforeCompile;
   material.onBeforeCompile = (shader, renderer) => {
     inheritedCompile.call(material, shader, renderer);
     shader.uniforms.surfaceMap = { value: surfaceTexture };
@@ -47,7 +47,7 @@ export function createSurfaceMaterial(
         diffuseColor.rgb *= surfaceColor;`,
       );
   };
-  material.customProgramCacheKey = () => "earthview-surface-land-with-gebco-v3";
+  material.customProgramCacheKey = () => "earthview-surface-land-with-gebco-v5";
 
   return material;
 }

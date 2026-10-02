@@ -10,11 +10,11 @@ export const SURFACE_TEXTURE_PATH = "/data/earth-views/surface/cross-blended-hyp
 
 type SurfaceLandProps = {
   readonly geometry: BufferGeometry;
-  readonly editorialMaterial: MeshStandardMaterial;
+  readonly baseLandMaterial: MeshStandardMaterial;
 };
 
 /** Reuses existing Natural Earth land geometry and inherited GEBCO shading. */
-export function SurfaceLand({ geometry, editorialMaterial }: SurfaceLandProps) {
+export function SurfaceLand({ geometry, baseLandMaterial }: SurfaceLandProps) {
   const renderer = useThree((state) => state.gl);
   const texture = useLoader(
     KTX2Loader,
@@ -22,8 +22,8 @@ export function SurfaceLand({ geometry, editorialMaterial }: SurfaceLandProps) {
     (loader) => loader.setTranscoderPath("/basis/").detectSupport(renderer),
   );
   const material = useMemo(
-    () => createSurfaceMaterial(editorialMaterial, texture),
-    [editorialMaterial, texture],
+    () => createSurfaceMaterial(baseLandMaterial, texture),
+    [baseLandMaterial, texture],
   );
 
   useEffect(() => () => material.dispose(), [material]);
