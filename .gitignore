@@ -7,6 +7,7 @@ graphify-out/
 *.tsbuildinfo
 *_dev.ipynb
 /config.yaml
+/data/source-assets/natural-earth/
 .vscode/
 .DS_Store
 __pycache__/

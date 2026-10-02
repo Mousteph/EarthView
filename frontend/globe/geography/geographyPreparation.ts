@@ -40,8 +40,10 @@ export type GeographySources = {
 
 export type PreparedGeography = {
   landPositions: Float32Array;
+  landNormals: Float32Array;
   landIndices: Uint32Array;
   lakePositions: Float32Array;
+  lakeNormals: Float32Array;
   lakeIndices: Uint32Array;
   coastlinePositions: Float32Array;
   coastlineIndices: Uint32Array;
@@ -285,6 +287,20 @@ function appendLineCollection(data: FeatureCollection, builder: IndexedGeometryB
   }
 }
 
+function createRadialNormals(positions: Float32Array) {
+  const normals = new Float32Array(positions.length);
+  for (let index = 0; index < positions.length; index += 3) {
+    const x = positions[index];
+    const y = positions[index + 1];
+    const z = positions[index + 2];
+    const length = Math.hypot(x, y, z);
+    normals[index] = x / length;
+    normals[index + 1] = y / length;
+    normals[index + 2] = z / length;
+  }
+  return normals;
+}
+
 export function prepareGeography(data: GeographySources): PreparedGeography {
   const startedAt = performance.now();
   const land: IndexedGeometryBuilder = { positions: [], indices: [], vertices: new Map() };
@@ -300,10 +316,15 @@ export function prepareGeography(data: GeographySources): PreparedGeography {
   appendLineCollection(data.coastlines, coastlines);
   appendLineCollection(data.borders, borders);
 
+  const landPositions = new Float32Array(land.positions);
+  const lakePositions = new Float32Array(lakes.positions);
+
   return {
-    landPositions: new Float32Array(land.positions),
+    landPositions,
+    landNormals: createRadialNormals(landPositions),
     landIndices: new Uint32Array(land.indices),
-    lakePositions: new Float32Array(lakes.positions),
+    lakePositions,
+    lakeNormals: createRadialNormals(lakePositions),
     lakeIndices: new Uint32Array(lakes.indices),
     coastlinePositions: new Float32Array(coastlines.positions),
     coastlineIndices: new Uint32Array(coastlines.indices),

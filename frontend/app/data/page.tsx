@@ -4,7 +4,7 @@ import { EarthViewHeader } from "@/shared/ui/EarthViewHeader";
 
 export const metadata: Metadata = {
   title: "Data Sources | EarthView",
-  description: "Sources for EarthView's earthquake, fire, pipeline, geography, and relief data.",
+  description: "Sources for EarthView's live data, geography, relief, and globe overlays.",
 };
 
 const sources = [
@@ -70,6 +70,24 @@ const sources = [
     description: "EarthView derives its local land and seafloor slope-shading texture from the GEBCO_2026 Grid at 15 arc-second intervals. GEBCO does not endorse EarthView; the grid is not suitable for navigation or safety at sea.",
     href: "https://doi.org/10.5285/4f68d5c7-45eb-f999-e063-7086abc036fa",
     linkLabel: "View GEBCO_2026 Grid citation",
+  },
+  {
+    number: "08",
+    category: "Globe overlays",
+    title: "Surface land appearance",
+    provider: "Natural Earth",
+    description: "The Surface layer uses Natural Earth Cross-Blended Hypsometric Tints, raster version 3.2.0 at 1:10m resolution. Its no-relief raster is resampled to a mipmapped texture; GEBCO relief and Natural Earth vector geography remain separate. Natural Earth data is public domain.",
+    href: "https://www.naturalearthdata.com/downloads/10m-raster-data/10m-cross-blend-hypso/",
+    linkLabel: "View Natural Earth Cross-Blended Hypsometric Tints",
+  },
+  {
+    number: "09",
+    category: "Globe overlays",
+    title: "Country and city labels",
+    provider: "Natural Earth",
+    description: "Country names use bundled Natural Earth Admin-0 label coordinates. City names and adaptive zoom ranks come from Natural Earth 1:10m Populated Places version 5.1.2. Natural Earth data is public domain; optional credit is “Made with Natural Earth.”",
+    href: "https://www.naturalearthdata.com/about/terms-of-use/",
+    linkLabel: "View Natural Earth data and terms",
   },
 ] as const;
 
