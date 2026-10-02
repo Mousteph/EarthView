@@ -239,6 +239,66 @@
 
 .event-details .orbital-detail-section dt, .event-details .orbital-detail-section dd { font-size: 13px; }
 
+.orbital-live-position-section dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px !important; }
+
+.event-details .orbital-live-position-section dl > div { display: block; min-width: 0; }
+
+.orbital-live-position-section .live-coordinate-row { grid-column: 1 / -1; }
+
+.orbital-live-position-section dt { margin-bottom: 2px; font-size: 10px !important; letter-spacing: .04em; }
+
+.orbital-live-position-section dd { color: var(--color-orbital-label-active); font-size: 13px !important; font-variant-numeric: tabular-nums; }
+
+.iss-live-section { display: grid; gap: 10px; }
+
+.iss-live-heading { display: flex; min-height: 26px; align-items: center; justify-content: space-between; gap: 8px; }
+
+.iss-live-heading h3, .iss-live-floating-title { margin: 0; color: var(--color-orbital-section-heading); font-size: 11px; font-weight: 750; letter-spacing: .2em; text-transform: uppercase; }
+
+.iss-live-action, .iss-live-window-action { display: grid; width: 30px; height: 30px; flex: none; place-items: center; border: 1px solid var(--color-pill-border); border-radius: 6px; padding: 6px; background: var(--color-panel-soft); color: var(--color-orbital-label-active); cursor: pointer; }
+
+.iss-live-heading > .iss-live-action { border: 0; border-radius: 50%; background: transparent; }
+
+.iss-live-action svg { width: 16px; height: 16px; }
+
+.iss-live-action-label { justify-self: start; border: 0; padding: 0; background: transparent; color: var(--color-orbital-label-active); font: inherit; font-size: 11px; text-decoration: underline; text-decoration-color: var(--color-link-decoration); text-underline-offset: 3px; cursor: pointer; }
+
+.iss-live-action:hover, .iss-live-window-action:hover { border-radius: 50%; background: var(--color-hover-backdrop); color: var(--color-ink); }
+
+.iss-live-action:focus-visible, .iss-live-action-label:focus-visible, .iss-live-window-action:focus-visible, .iss-live-drag-handle:focus-visible, .iss-live-source:focus-visible { outline: 2px solid var(--color-ink); outline-offset: 2px; }
+
+.iss-live-frame-host { width: 100%; min-height: 200px; aspect-ratio: 16 / 9; overflow: hidden; background: var(--color-ocean-blue); }
+
+.iss-live-frame { display: block; width: 100%; height: 100%; min-height: 200px; border: 0; background: var(--color-ocean-blue); }
+
+.iss-live-placeholder { display: grid; min-height: 48px; align-content: center; gap: 7px; color: var(--color-body-muted); font-size: 11px; }
+
+.iss-live-unavailable { margin: 0; color: var(--color-status-error); font-size: 12px; line-height: 1.4; }
+
+.iss-live-source { justify-self: start; color: var(--color-orbital-label-active); font-size: 11px; line-height: 1.4; text-decoration-color: var(--color-link-decoration); text-underline-offset: 3px; }
+
+.iss-live-floating-player { position: fixed; z-index: 50; left: max(8px, calc(50% - 180px)); bottom: 18px; display: flex; width: min(360px, calc(100vw - 24px)); height: 252px; min-width: min(220px, calc(100vw - 16px)); min-height: min(240px, calc(100dvh - 16px)); max-width: calc(100vw - 16px); max-height: calc(100dvh - 16px); flex-direction: column; overflow: hidden; resize: both; border: 1px solid var(--color-divider); border-radius: 10px; background: transparent; }
+
+.iss-live-floating-header { display: flex; min-height: 38px; align-items: center; gap: 6px; border-bottom: 1px solid var(--color-divider); padding: 4px 6px; background: var(--color-panel-soft); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+
+.iss-live-drag-handle { display: flex; min-width: 0; flex: 1; align-items: center; gap: 8px; border: 0; padding: 5px; background: transparent; text-align: left; cursor: grab; touch-action: none; }
+
+.iss-live-drag-handle:active { cursor: grabbing; }
+
+.iss-live-window-action { width: 30px; height: 30px; border: 0; border-radius: 50%; padding: 3px; background: transparent; font-size: 18px; line-height: 1; }
+
+.iss-live-floating-frame-host { min-height: 200px; flex: 1; overflow: hidden; background: var(--color-ocean-blue); }
+
+.iss-live-floating-error { position: absolute; inset: 38px 0 0; display: grid; align-content: center; justify-items: center; gap: 8px; background: color-mix(in srgb, var(--color-parchment) 94%, transparent); color: var(--color-status-error); font-size: 12px; text-align: center; }
+
+.iss-live-floating-error p { margin: 0; }
+
+.iss-live-floating-error a, .iss-live-floating-error button { color: var(--color-orbital-label-active); font: inherit; }
+
+@media (max-width: 235px), (max-height: 245px) {
+  .iss-live-heading > .iss-live-action { display: none; }
+}
+
 .event-details dl > div { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 14px; }
 
 .event-details dt, .event-details dd { margin: 0; font-size: 13px; line-height: 1.45; }

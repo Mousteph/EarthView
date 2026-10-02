@@ -13,7 +13,7 @@ import {
   Vector3,
   type Group,
 } from "three";
-import type { OrbitalObject, SelectedSatellitePosition } from "@/features/orbital/model";
+import { isInternationalSpaceStation, type OrbitalObject, type SelectedSatellitePosition } from "@/features/orbital/model";
 import { recordSatelliteWorkerCalculation, recordSatelliteWorkerCreated, recordSatelliteWorkerInitialization } from "@/features/orbital/performance";
 import { DESIGN_COLOR_TOKENS, readDesignColor } from "@/shared/designTokens";
 import { segmentHiddenByEarth, snapshotAlpha } from "./satelliteMath";
@@ -40,6 +40,26 @@ type Snapshot = { first: Float32Array; second: Float32Array; startMs: number; en
 const pointColors = new Map<string, Color>();
 const satellitePickRadiusPixels = 6;
 const dragThresholdPixels = 5;
+const trajectoryTubeRadius = 0.0028;
+const trajectoryDashLength = 0.075;
+const trajectoryDashGap = 0.045;
+const trajectoryRadialSegments = 5;
+
+type TrajectoryUniforms = {
+  readonly currentDistance: { value: number };
+  readonly dashLength: { value: number };
+  readonly dashPeriod: { value: number };
+};
+
+type TrajectoryGeometry = {
+  readonly geometry: BufferGeometry;
+  readonly centerline: Float32Array;
+  readonly tubeSegments: number;
+  readonly pathLength: number;
+  readonly radialSegments: number;
+  activeRingIndex: number;
+  readonly activeRingBase: Float32Array;
+};
 
 function colorForObject(satellite: OrbitalObject): Color {
   const color = orbitalObjectColor(satellite);
@@ -63,8 +83,8 @@ function createGeometry(count: number) {
   return geometry;
 }
 
-function createMaterial(size: number, selected: boolean) {
-  const material = new PointsMaterial({ size, sizeAttenuation: false, depthTest: true, depthWrite: false, transparent: true, opacity: selected ? 0.82 : 0.83, vertexColors: !selected });
+function createMaterial(size: number, selected: boolean, stationGlyph = false) {
+  const material = new PointsMaterial({ size, sizeAttenuation: false, depthTest: true, depthWrite: false, transparent: true, opacity: selected ? 0.82 : 0.83, vertexColors: !selected && !stationGlyph });
   material.userData.interpolationAlpha = { value: 0 };
   material.onBeforeCompile = (shader) => {
     shader.uniforms.interpolationAlpha = material.userData.interpolationAlpha;
@@ -78,9 +98,18 @@ function createMaterial(size: number, selected: boolean) {
       .replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>
         if (satelliteValid < 0.5) discard;
         float radius = length(gl_PointCoord - vec2(0.5));
-        ${selected ? "if (radius > 0.5 || (radius < 0.29 && radius > 0.17)) discard;" : "if (radius > 0.5) discard;"}`);
+        ${stationGlyph ? `
+        vec2 station = gl_PointCoord - vec2(0.5);
+        float bus = step(abs(station.x), 0.075) * step(abs(station.y), 0.15);
+        float truss = step(abs(station.x), 0.36) * step(abs(station.y), 0.035);
+        float panels = (step(-0.44, station.x) * step(station.x, -0.15) + step(0.15, station.x) * step(station.x, 0.44)) * step(abs(station.y), 0.18);
+        float glyph = max(max(bus, truss), panels);
+        if (satelliteValid < 0.5 || glyph < 0.5) discard;
+        float panelGrid = max(1.0 - step(0.018, abs(abs(station.x) - 0.295)), 1.0 - step(0.015, abs(station.y)));
+        if (panels > 0.5 && panelGrid > 0.5 && bus < 0.5 && truss < 0.5) discard;`
+          : selected ? "if (radius > 0.5 || (radius < 0.29 && radius > 0.17)) discard;" : "if (radius > 0.5) discard;"}`);
   };
-  material.customProgramCacheKey = () => `earthview-satellite-${selected ? "selected" : "points"}-v1`;
+  material.customProgramCacheKey = () => `earthview-satellite-${stationGlyph ? "iss" : selected ? "selected" : "points"}-v1`;
   return material;
 }
 
@@ -91,6 +120,109 @@ function setGeometryPositions(geometry: BufferGeometry, first: Float32Array, sec
   (future.array as Float32Array).set(second);
   current.needsUpdate = true;
   future.needsUpdate = true;
+}
+
+function hasValidGlobePosition(x: number, y: number, z: number) {
+  return x * x + y * y + z * z >= 0.5;
+}
+
+function createTrajectoryGeometry(positions: Float32Array): TrajectoryGeometry | null {
+  const pointCount = positions.length / 3;
+  if (pointCount < 3 || pointCount % 2 !== 1) return null;
+  const points = Array.from({ length: pointCount }, (_, index) => new Vector3(
+    positions[index * 3], positions[index * 3 + 1], positions[index * 3 + 2],
+  ));
+  const curve = new CatmullRomCurve3(points, false);
+  const tubeSegments = pointCount * 8;
+  const pathLength = curve.getLength();
+  const geometry = new TubeGeometry(curve, tubeSegments, trajectoryTubeRadius, trajectoryRadialSegments, false);
+  const ringVertexCount = trajectoryRadialSegments + 1;
+  const vertexCount = (tubeSegments + 1) * ringVertexCount;
+  const distanceValues = new Float32Array(vertexCount);
+  for (let ring = 0; ring <= tubeSegments; ring += 1) {
+    const distance = ring / tubeSegments * pathLength;
+    distanceValues.fill(distance, ring * ringVertexCount, (ring + 1) * ringVertexCount);
+  }
+  geometry.setAttribute("pathDistance", new BufferAttribute(distanceValues, 1));
+
+  const centerline = new Float32Array((tubeSegments + 1) * 3);
+  const sample = new Vector3();
+  const centerPointOffset = Math.floor(pointCount / 2) * 3;
+  let activeRingIndex = 0;
+  let closestCenterDistance = Infinity;
+  for (let ring = 0; ring <= tubeSegments; ring += 1) {
+    curve.getPointAt(ring / tubeSegments, sample);
+    const offset = ring * 3;
+    centerline[offset] = sample.x;
+    centerline[offset + 1] = sample.y;
+    centerline[offset + 2] = sample.z;
+    const dx = sample.x - positions[centerPointOffset];
+    const dy = sample.y - positions[centerPointOffset + 1];
+    const dz = sample.z - positions[centerPointOffset + 2];
+    const distanceSquared = dx * dx + dy * dy + dz * dz;
+    if (distanceSquared < closestCenterDistance) {
+      closestCenterDistance = distanceSquared;
+      activeRingIndex = ring;
+    }
+  }
+
+  const vertexOffset = activeRingIndex * ringVertexCount * 3;
+  const geometryPositions = (geometry.getAttribute("position") as BufferAttribute).array as Float32Array;
+  return {
+    geometry,
+    centerline,
+    tubeSegments,
+    pathLength,
+    radialSegments: trajectoryRadialSegments,
+    activeRingIndex,
+    activeRingBase: geometryPositions.slice(vertexOffset, vertexOffset + ringVertexCount * 3),
+  };
+}
+
+function updateTrajectoryAnchor(path: TrajectoryGeometry, x: number, y: number, z: number, material: MeshBasicMaterial) {
+  const ringVertexCount = path.radialSegments + 1;
+  let bestRingIndex = path.activeRingIndex;
+  let bestDistance = Infinity;
+  for (let ring = 1; ring < path.tubeSegments; ring += 1) {
+    const offset = ring * 3;
+    const dx = path.centerline[offset] - x;
+    const dy = path.centerline[offset + 1] - y;
+    const dz = path.centerline[offset + 2] - z;
+    const distance = dx * dx + dy * dy + dz * dz;
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestRingIndex = ring;
+    }
+  }
+
+  const position = path.geometry.getAttribute("position") as BufferAttribute;
+  const positionValues = position.array as Float32Array;
+  const previousRingIndex = path.activeRingIndex;
+  const previousVertexOffset = previousRingIndex * ringVertexCount;
+  const nextVertexOffset = bestRingIndex * ringVertexCount;
+  if (bestRingIndex !== previousRingIndex) {
+    positionValues.set(path.activeRingBase, previousVertexOffset * 3);
+    path.activeRingBase.set(positionValues.subarray(nextVertexOffset * 3, (nextVertexOffset + ringVertexCount) * 3));
+    path.activeRingIndex = bestRingIndex;
+  }
+
+  const nextCenterOffset = bestRingIndex * 3;
+  const deltaX = x - path.centerline[nextCenterOffset];
+  const deltaY = y - path.centerline[nextCenterOffset + 1];
+  const deltaZ = z - path.centerline[nextCenterOffset + 2];
+  for (let vertex = 0; vertex < ringVertexCount; vertex += 1) {
+    const offset = vertex * 3;
+    positionValues[nextVertexOffset * 3 + offset] = path.activeRingBase[offset] + deltaX;
+    positionValues[nextVertexOffset * 3 + offset + 1] = path.activeRingBase[offset + 1] + deltaY;
+    positionValues[nextVertexOffset * 3 + offset + 2] = path.activeRingBase[offset + 2] + deltaZ;
+  }
+  position.clearUpdateRanges();
+  if (bestRingIndex !== previousRingIndex) position.addUpdateRange(previousVertexOffset * 3, ringVertexCount * 3);
+  position.addUpdateRange(nextVertexOffset * 3, ringVertexCount * 3);
+  position.needsUpdate = true;
+
+  const uniforms = material.userData.trajectoryUniforms as TrajectoryUniforms;
+  uniforms.currentDistance.value = bestRingIndex / path.tubeSegments * path.pathLength;
 }
 
 export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, onSelect, onHover, onHoverEnd, onSelectedData, onSelectedPositionChange }: SatelliteLayerProps) {
@@ -110,6 +242,7 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
   const markerMaterialRef = useRef<PointsMaterial | null>(null);
   const highlightMaterialRef = useRef<PointsMaterial | null>(null);
   const hoverMaterialRef = useRef<PointsMaterial | null>(null);
+  const issMaterialRef = useRef<PointsMaterial | null>(null);
   const projected = useMemo(() => new Vector3(), []);
   const cameraPosition = useMemo(() => new Vector3(), []);
   const geometry = useMemo(() => createGeometry(satellites.length), [satellites]);
@@ -124,19 +257,40 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
   })), [satellites]);
   const selectedGeometry = useMemo(() => createGeometry(1), []);
   const hoverGeometry = useMemo(() => createGeometry(1), []);
+  const issGeometry = useMemo(() => createGeometry(1), []);
   const material = useMemo(() => createMaterial(3.4, false), []);
   const selectedMaterial = useMemo(() => createMaterial(12, true), []);
   const hoverMaterial = useMemo(() => createMaterial(9, true), []);
-  const pathMaterial = useMemo(() => new MeshBasicMaterial({ transparent: true, opacity: 0.82, depthTest: true, depthWrite: false }), []);
+  const issMaterial = useMemo(() => createMaterial(23, false, true), []);
+  const pathMaterial = useMemo(() => {
+    const material = new MeshBasicMaterial({ transparent: true, opacity: 0.82, depthTest: true, depthWrite: false });
+    const trajectoryUniforms: TrajectoryUniforms = {
+      currentDistance: { value: 0 },
+      dashLength: { value: trajectoryDashLength },
+      dashPeriod: { value: trajectoryDashLength + trajectoryDashGap },
+    };
+    material.userData.trajectoryUniforms = trajectoryUniforms;
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.trajectoryCurrentDistance = trajectoryUniforms.currentDistance;
+      shader.uniforms.trajectoryDashLength = trajectoryUniforms.dashLength;
+      shader.uniforms.trajectoryDashPeriod = trajectoryUniforms.dashPeriod;
+      shader.vertexShader = shader.vertexShader
+        .replace("#include <common>", "#include <common>\nattribute float pathDistance;\nvarying float vPathDistance;")
+        .replace("#include <begin_vertex>", "#include <begin_vertex>\nvPathDistance = pathDistance;");
+      shader.fragmentShader = shader.fragmentShader
+        .replace("#include <common>", "#include <common>\nvarying float vPathDistance;\nuniform float trajectoryCurrentDistance;\nuniform float trajectoryDashLength;\nuniform float trajectoryDashPeriod;")
+        .replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>
+          if (vPathDistance > trajectoryCurrentDistance
+            && mod(vPathDistance - trajectoryCurrentDistance, trajectoryDashPeriod) > trajectoryDashLength) discard;`);
+    };
+    material.customProgramCacheKey = () => "earthview-orbit-past-future-tube-v1";
+    return material;
+  }, []);
   const [path, setPath] = useState<{ id: string; positions: Float32Array } | null>(null);
   const selectedIndex = useMemo(() => satellites.findIndex((satellite) => satellite.id === selectedId), [satellites, selectedId]);
   const hoveredIndex = useMemo(() => satellites.findIndex((satellite) => satellite.id === hoveredId), [satellites, hoveredId]);
-  const pathGeometry = useMemo(() => path && path.id === selectedId ? (() => {
-    const points = Array.from({ length: path.positions.length / 3 }, (_, index) => new Vector3(
-      path.positions[index * 3], path.positions[index * 3 + 1], path.positions[index * 3 + 2],
-    ));
-    return new TubeGeometry(new CatmullRomCurve3(points, true), points.length * 2, 0.0028, 5, true);
-  })() : null, [path, selectedId]);
+  const issIndex = useMemo(() => satellites.findIndex(isInternationalSpaceStation), [satellites]);
+  const pathGeometry = useMemo(() => path && path.id === selectedId ? createTrajectoryGeometry(path.positions) : null, [path, selectedId]);
 
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
   useEffect(() => { selectedIndexRef.current = selectedIndex; }, [selectedIndex]);
@@ -147,9 +301,17 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
   useEffect(() => { onHoverEndRef.current = onHoverEnd; }, [onHoverEnd]);
   useEffect(() => { onDataRef.current = onSelectedData; }, [onSelectedData]);
   useEffect(() => { onScreenRef.current = onSelectedPositionChange; }, [onSelectedPositionChange]);
-  useEffect(() => { markerMaterialRef.current = material; }, [material]);
-  useEffect(() => { highlightMaterialRef.current = selectedMaterial; }, [selectedMaterial]);
-  useEffect(() => { hoverMaterialRef.current = hoverMaterial; }, [hoverMaterial]);
+  useEffect(() => {
+    markerMaterialRef.current = material;
+    highlightMaterialRef.current = selectedMaterial;
+    hoverMaterialRef.current = hoverMaterial;
+    issMaterialRef.current = issMaterial;
+  }, [hoverMaterial, issMaterial, material, selectedMaterial]);
+  useEffect(() => {
+    const iss = issIndex >= 0 ? satellites[issIndex] : null;
+    issMaterial.color.copy(iss ? colorForObject(iss) : new Color(readDesignColor(DESIGN_COLOR_TOKENS.satellite)));
+    invalidate();
+  }, [invalidate, issIndex, issMaterial, satellites]);
   useEffect(() => {
     const colors = geometry.getAttribute("color") as BufferAttribute;
     const values = colors.array as Float32Array;
@@ -179,14 +341,23 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
     invalidate();
   }, [geometry, invalidate, satellites, visibility]);
 
+  useEffect(() => {
+    const attribute = issGeometry.getAttribute("filterVisible") as BufferAttribute;
+    (attribute.array as Float32Array)[0] = issIndex >= 0 ? visibility?.[issIndex] ?? 1 : 0;
+    attribute.needsUpdate = true;
+    invalidate();
+  }, [invalidate, issGeometry, issIndex, visibility]);
+
   useEffect(() => () => geometry.dispose(), [geometry]);
   useEffect(() => () => selectedGeometry.dispose(), [selectedGeometry]);
   useEffect(() => () => hoverGeometry.dispose(), [hoverGeometry]);
+  useEffect(() => () => issGeometry.dispose(), [issGeometry]);
   useEffect(() => () => material.dispose(), [material]);
   useEffect(() => () => selectedMaterial.dispose(), [selectedMaterial]);
   useEffect(() => () => hoverMaterial.dispose(), [hoverMaterial]);
+  useEffect(() => () => issMaterial.dispose(), [issMaterial]);
   useEffect(() => () => pathMaterial.dispose(), [pathMaterial]);
-  useEffect(() => () => pathGeometry?.dispose(), [pathGeometry]);
+  useEffect(() => () => pathGeometry?.geometry.dispose(), [pathGeometry]);
 
   useEffect(() => {
     if (satellites.length === 0) return;
@@ -200,6 +371,10 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
         if (!first) return;
         snapshot.current = { first, second: message.second, startMs: message.startMs, endMs: message.endMs };
         setGeometryPositions(geometry, first, message.second);
+        if (issIndex >= 0) {
+          const offset = issIndex * 3;
+          setGeometryPositions(issGeometry, first.subarray(offset, offset + 3), message.second.subarray(offset, offset + 3));
+        }
         const index = selectedIndexRef.current;
         if (index >= 0) {
           const offset = index * 3;
@@ -230,7 +405,7 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
       onDataRef.current(null);
       onScreenRef.current(null);
     };
-  }, [geometry, hoverGeometry, invalidate, orbitElements, satellites.length, selectedGeometry]);
+  }, [geometry, hoverGeometry, invalidate, issGeometry, issIndex, orbitElements, satellites.length, selectedGeometry]);
 
   useEffect(() => {
     worker.current?.postMessage({ type: "select", id: selectedId } satisfies SatelliteWorkerInput);
@@ -296,8 +471,8 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
         for (let index = 0; index < satellites.length; index += 1) {
           if (visibility && !visibility[index]) continue;
           const offset = index * 3;
-          if (current.first[offset] ** 2 + current.first[offset + 1] ** 2 + current.first[offset + 2] ** 2 < 0.5
-            || current.second[offset] ** 2 + current.second[offset + 1] ** 2 + current.second[offset + 2] ** 2 < 0.5) continue;
+          if (!hasValidGlobePosition(current.first[offset], current.first[offset + 1], current.first[offset + 2])
+            || !hasValidGlobePosition(current.second[offset], current.second[offset + 1], current.second[offset + 2])) continue;
           startProjected.set(current.first[offset], current.first[offset + 1], current.first[offset + 2]).applyMatrix4(group.current.matrixWorld).project(camera);
           endProjected.set(current.second[offset], current.second[offset + 1], current.second[offset + 2]).applyMatrix4(group.current.matrixWorld).project(camera);
           if ((startProjected.z < -1 && endProjected.z < -1) || (startProjected.z > 1 && endProjected.z > 1)) continue;
@@ -327,7 +502,7 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
         const x = first[offset] + (second[offset] - first[offset]) * blend;
         const y = first[offset + 1] + (second[offset + 1] - first[offset + 1]) * blend;
         const z = first[offset + 2] + (second[offset + 2] - first[offset + 2]) * blend;
-        if (x * x + y * y + z * z < 0.5) continue;
+        if (!hasValidGlobePosition(x, y, z)) continue;
         projected.set(x, y, z).applyMatrix4(group.current.matrixWorld);
         if (segmentHiddenByEarth(cameraPosition.x, cameraPosition.y, cameraPosition.z, projected.x, projected.y, projected.z)) continue;
         const depth = projected.distanceToSquared(cameraPosition);
@@ -400,21 +575,20 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
     if (markerMaterialRef.current) markerMaterialRef.current.userData.interpolationAlpha.value = blend;
     if (highlightMaterialRef.current) highlightMaterialRef.current.userData.interpolationAlpha.value = blend;
     if (hoverMaterialRef.current) hoverMaterialRef.current.userData.interpolationAlpha.value = blend;
+    if (issMaterialRef.current) issMaterialRef.current.userData.interpolationAlpha.value = blend;
     if (!selectedIdRef.current || !group.current) return;
     const index = selectedIndexRef.current;
     if (index < 0) return;
     const offset = index * 3;
-    if (
-      current.first[offset] ** 2 + current.first[offset + 1] ** 2 + current.first[offset + 2] ** 2 < 0.5
-      || current.second[offset] ** 2 + current.second[offset + 1] ** 2 + current.second[offset + 2] ** 2 < 0.5
-    ) {
+    if (!hasValidGlobePosition(current.first[offset], current.first[offset + 1], current.first[offset + 2])
+      || !hasValidGlobePosition(current.second[offset], current.second[offset + 1], current.second[offset + 2])) {
       onScreenRef.current(null);
       return;
     }
     const x = current.first[offset] + (current.second[offset] - current.first[offset]) * blend;
     const y = current.first[offset + 1] + (current.second[offset + 1] - current.first[offset + 1]) * blend;
     const z = current.first[offset + 2] + (current.second[offset + 2] - current.first[offset + 2]) * blend;
-    if (x * x + y * y + z * z < 0.5) {
+    if (!hasValidGlobePosition(x, y, z)) {
       onScreenRef.current(null);
       return;
     }
@@ -430,13 +604,15 @@ export function SatelliteLayer({ satellites, visibility, selectedId, hoveredId, 
       onScreenRef.current(null);
       return;
     }
+    if (pathGeometry) updateTrajectoryAnchor(pathGeometry, x, y, z, pathMaterial);
     onScreenRef.current({ x: (projected.x + 1) * size.width * 0.5, y: (1 - projected.y) * size.height * 0.5, width: size.width, height: size.height });
   });
 
   return <group ref={group}>
     <points geometry={geometry} material={material} frustumCulled={false} raycast={() => null} renderOrder={2} />
+    {issIndex >= 0 ? <points geometry={issGeometry} material={issMaterial} frustumCulled={false} raycast={() => null} renderOrder={2.2} /> : null}
     {hoveredId && hoveredId !== selectedId ? <points geometry={hoverGeometry} material={hoverMaterial} frustumCulled={false} raycast={() => null} renderOrder={2.5} /> : null}
     {selectedId ? <points geometry={selectedGeometry} material={selectedMaterial} frustumCulled={false} raycast={() => null} renderOrder={4} /> : null}
-    {selectedId && pathGeometry ? <mesh geometry={pathGeometry} material={pathMaterial} frustumCulled={false} raycast={() => null} renderOrder={3} /> : null}
+    {selectedId && pathGeometry ? <mesh geometry={pathGeometry.geometry} material={pathMaterial} frustumCulled={false} raycast={() => null} renderOrder={3} /> : null}
   </group>;
 }

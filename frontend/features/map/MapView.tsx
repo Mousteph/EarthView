@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from "react";
 import { EarthViewHeader } from "@/shared/ui/EarthViewHeader";
 import { LayerControls, type LayerControl } from "./LayerControls";
 import { resolveSelection, type SelectedEvent, type SelectionData } from "./selection";
@@ -9,8 +9,11 @@ import { useGlobeHover } from "./useGlobeHover";
 import { useMapState } from "./useMapState";
 import { useMapLayers } from "./useMapLayers";
 import { GlobeScene, type MapScale } from "@/globe/GlobeScene";
+import { VisualLayerToggles } from "./VisualLayerToggles";
 import type { SelectedPointScreenPosition } from "@/globe/points/PointLayer";
-import type { OrbitalMode, SelectedSatellitePosition } from "@/features/orbital/model";
+import { isInternationalSpaceStation, type OrbitalMode, type SelectedSatellitePosition } from "@/features/orbital/model";
+import { ISSLivePlayerHost } from "@/features/orbital/ISSLivePlayerHost";
+import { initialISSPlayerLifecycle, issPlayerLifecycleReducer, shouldMountISSPlayer } from "@/features/orbital/issPlayerLifecycle";
 import type { PipelineFuel } from "@/features/pipelines/model";
 import { filterPipelines, reconcilePipelineStatusFilters as reconcilePipelineStatusFilterValues } from "@/features/pipelines/filters";
 import { orbitalVisibilityMask } from "@/features/orbital/filters";
@@ -19,15 +22,19 @@ import { orbitalObjectColor } from "@/features/orbital/colors";
 export function MapView() {
   const [hasInteracted, setHasInteracted] = useState(false);
   const markInteracted = useCallback(() => setHasInteracted(true), []);
-  const { earthquakesVisible, firesVisible, enabledOrbitalModes, enabledPipelineFuels, pipelineStatusFilters, orbitalFilters, selection,
+  const { earthquakesVisible, firesVisible, visualLayers, enabledOrbitalModes, enabledPipelineFuels, pipelineStatusFilters, orbitalFilters, selection,
     toggleEarthquakes: toggleEarthquakesState, toggleFires: toggleFiresState, toggleOrbitalMode,
+    toggleVisualLayer,
     togglePipelineFuel: togglePipelineFuelState, changePipelineStatusFilters, reconcilePipelineStatusFilters: reconcilePipelineStatusFilterState,
     changeOrbitalFilter, select, clearSelection, reconcileSelection } = useMapState();
   const satellitesVisible = enabledOrbitalModes.length > 0;
   const [selectedSatellitePosition, setSelectedSatellitePosition] = useState<SelectedSatellitePosition | null>(null);
+  const [issPlayerLifecycle, dispatchISSPlayer] = useReducer(issPlayerLifecycleReducer, initialISSPlayerLifecycle);
+  const [inlineISSPlayerHost, setInlineISSPlayerHostState] = useState<HTMLDivElement | null>(null);
+  const [issPlayerRetryToken, setISSPlayerRetryToken] = useState(0);
   const [mapScale, setMapScale] = useState<MapScale | null>(null);
   const handleScaleChange = useCallback((scale: MapScale) => {
-    setMapScale((current) => current && current.distanceKm === scale.distanceKm && Math.abs(current.widthPx - scale.widthPx) < 0.5 ? current : scale);
+    setMapScale((current) => current && current.distanceKm === scale.distanceKm && Math.abs(current.widthPx - scale.widthPx) < 4 ? current : scale);
   }, []);
   const connectorRef = useRef<SVGSVGElement>(null);
   const connectorPathRef = useRef<SVGPathElement>(null);
@@ -58,6 +65,8 @@ export function MapView() {
     pipelines, enabledPipelineFuels,
   }), [earthquakes, fires, orbitalObjects, visibleMask, earthquakesVisible, firesVisible, enabledOrbitalModes, selectedSatellitePosition, pipelines, enabledPipelineFuels]);
   const selected: SelectedEvent | null = resolveSelection(selection, selectionData);
+  const isISSSelected = selected?.type === "satellites" && isInternationalSpaceStation(selected.event);
+  const issPlayerVisible = shouldMountISSPlayer(issPlayerLifecycle);
   const hoverData: HoverData = useMemo(() => ({
     earthquakes, fires, orbitalObjects, orbitalVisibility: visibleMask, earthquakesVisible, firesVisible,
     satellitesVisible, pipelines, pipelinesVisible: enabledPipelineFuels.length > 0,
@@ -76,6 +85,9 @@ export function MapView() {
   useEffect(() => {
     reconcilePipelineStatusFilterState(reconcilePipelineStatusFilterValues(pipelineStatusFilters, pipelineFilters));
   }, [pipelineFilters, pipelineStatusFilters, reconcilePipelineStatusFilterState]);
+  useEffect(() => {
+    dispatchISSPlayer({ type: "selection", isISSSelected });
+  }, [isISSSelected, issPlayerLifecycle.detached]);
 
   const reconcile = (next: SelectionData) => {
     reconcileSelection(next);
@@ -127,6 +139,21 @@ export function MapView() {
   const handleSelectedSatelliteData = useCallback((position: SelectedSatellitePosition | null) => {
     setSelectedSatellitePosition(position);
   }, []);
+  const registerInlineISSPlayerHost = useCallback((node: HTMLDivElement | null) => setInlineISSPlayerHostState(node), []);
+  const detachISSPlayer = useCallback(() => dispatchISSPlayer({ type: "detach" }), []);
+  const dockISSPlayer = useCallback(() => dispatchISSPlayer({ type: "dock" }), []);
+  const showISSPlayer = useCallback(() => {
+    dispatchISSPlayer({ type: "show" });
+    setISSPlayerRetryToken((token) => token + 1);
+  }, []);
+  const closeISSPlayer = useCallback(() => {
+    dispatchISSPlayer({ type: "close" });
+  }, []);
+  const retryISSPlayer = useCallback(() => {
+    dispatchISSPlayer({ type: "retry" });
+    setISSPlayerRetryToken((token) => token + 1);
+  }, []);
+  const markISSVideoUnavailable = useCallback(() => dispatchISSPlayer({ type: "error" }), []);
 
   const layers: LayerControl[] = [
     { id: "earthquakes", label: "Earthquakes", description: "Seismic activity, real time", visible: earthquakesVisible,
@@ -188,6 +215,8 @@ export function MapView() {
       <div className="stage-title stage-title-left" aria-hidden="true">View<span>.</span></div>
       <div className="globe-canvas" ref={globeCanvasRef} onPointerEnter={handlePointerEnter} onPointerLeave={clearHover}>
         <GlobeScene
+          labelsVisible={visualLayers.labels}
+          surfaceVisible={visualLayers.surface}
           autoRotate={!hasInteracted}
           earthquakes={earthquakes}
           earthquakesVisible={earthquakesVisible}
@@ -214,6 +243,7 @@ export function MapView() {
           onHoverEnd={handleHoverEnd}
         />
       </div>
+      <VisualLayerToggles visible={visualLayers} onToggle={toggleVisualLayer} />
       <svg className="event-connector" ref={connectorRef} aria-hidden="true">
         <path ref={connectorPathRef} />
         <circle ref={connectorRingRef} r="13" />
@@ -230,11 +260,16 @@ export function MapView() {
       </div> : null}
       <EarthViewHeader />
       <LayerControls layers={layers} selected={selected} detailsRef={detailsRef} onClose={clearSelection} summaryItems={orbitalSummaryItems}
+        issPlayerVisible={issPlayerVisible} issPlayerDetached={issPlayerLifecycle.detached} issVideoUnavailable={issPlayerLifecycle.unavailable}
+        onInlinePlayerHost={registerInlineISSPlayerHost} onDetachISSPlayer={detachISSPlayer}
+        onRetryISSPlayer={retryISSPlayer} onShowISSPlayer={showISSPlayer}
         orbitalControls={{ enabledModes: enabledOrbitalModes, onModeToggle: handleOrbitalModeToggle, filters: filterOptions,
           selectedFilters: orbitalFilters, onFilterChange: handleOrbitalFilterChange }}
         pipelineControls={{ enabledFuels: enabledPipelineFuels, feeds: pipelineFeeds, statusOptions: pipelineFilters,
           selectedStatuses: pipelineStatusFilters, counts: pipelineCounts, onToggle: handlePipelineFuelToggle,
           onStatusChange: handlePipelineStatusChange }} />
+      <ISSLivePlayerHost lifecycle={issPlayerLifecycle} inlineHost={inlineISSPlayerHost} onDock={dockISSPlayer} onClose={closeISSPlayer}
+        unavailable={issPlayerLifecycle.unavailable} onUnavailable={markISSVideoUnavailable} onRetry={retryISSPlayer} retryToken={issPlayerRetryToken} />
       {mapScale ? <div className="map-scale" aria-label={`Scale: ${new Intl.NumberFormat("en-US").format(mapScale.distanceKm)} kilometers`}>
         <div className="map-scale-labels" style={{ width: `${mapScale.widthPx}px` }}>
           <span>0</span><span>{new Intl.NumberFormat("en-US").format(mapScale.distanceKm / 2)}</span><span>{new Intl.NumberFormat("en-US").format(mapScale.distanceKm)} km</span>

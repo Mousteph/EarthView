@@ -18,6 +18,16 @@ a { color: inherit; }
 
 .globe-canvas canvas { display: block; touch-action: none; }
 
+.visual-layer-toggles { position: absolute; z-index: 12; left: 50%; bottom: 5.5%; display: flex; gap: 1px; transform: translateX(-50%); }
+.visual-layer-toggle { position: relative; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; background: transparent; color: var(--color-ink); cursor: pointer; touch-action: manipulation; }
+.visual-layer-toggle-dot { width: 9px; height: 9px; border: 1px solid currentColor; border-radius: 50%; opacity: 0.55; transition: transform 180ms ease, opacity 180ms ease, background-color 180ms ease; }
+.visual-layer-toggle:hover .visual-layer-toggle-dot, .visual-layer-toggle:focus-visible .visual-layer-toggle-dot { transform: scale(1.2); opacity: 1; }
+.visual-layer-toggle.is-active .visual-layer-toggle-dot { background: currentColor; transform: scale(1.15); opacity: 0.9; }
+.visual-layer-toggle:focus-visible { outline: 1px solid currentColor; outline-offset: -3px; border-radius: 50%; }
+.visual-layer-toggle-label { position: absolute; top: 43px; left: 50%; width: max-content; transform: translateX(-50%) translateY(-3px); opacity: 0; pointer-events: none; font-size: 11px; letter-spacing: 0.04em; white-space: nowrap; transition: opacity 180ms ease, transform 180ms ease; }
+.visual-layer-toggle:hover .visual-layer-toggle-label, .visual-layer-toggle:focus-visible .visual-layer-toggle-label { opacity: 1; transform: translateX(-50%) translateY(0); }
+@media (hover: none) { .visual-layer-toggle.is-active .visual-layer-toggle-label { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
 .globe-hover-tooltip { position: absolute; z-index: 6; top: 0; left: 0; display: grid; max-width: min(280px, calc(100vw - 28px)); gap: 3px; border: 1px solid color-mix(in srgb, var(--hover-accent) 82%, transparent); border-radius: 7px; padding: 7px 10px; background: color-mix(in srgb, var(--hover-accent) 82%, transparent); color: var(--color-ink); box-shadow: 0 5px 18px rgb(29 29 29 / 16%); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); pointer-events: none; }
 
 .globe-hover-label { color: color-mix(in srgb, var(--color-ink), transparent 24%); font-size: 9px; font-weight: 700; letter-spacing: 0.12em; line-height: 1.15; text-transform: uppercase; }
@@ -91,6 +101,8 @@ a { color: inherit; }
 @media (max-width: 760px) {
   .earthview { min-height: 660px; }
   .globe-canvas { top: 275px; bottom: auto; height: min(54vh, 450px); }
+  .visual-layer-toggles { top: calc(275px + min(54vh, 450px) - 110px); bottom: auto; }
+  .visual-layer-toggle { color: var(--color-white); filter: drop-shadow(0 1px 3px rgb(0 0 0 / 75%)); }
   .stage-header { top: 17px; right: 20px; left: 20px; align-items: flex-start; }
   .stage-header::before { inset: -17px -20px -12px; }
   .stage-header-identity { flex-wrap: wrap; max-width: 240px; column-gap: 12px; row-gap: 5px; }

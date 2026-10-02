@@ -34,6 +34,17 @@ export const GEOGRAPHY_LOD_THRESHOLDS = {
   exitCloseDistance: 2.45,
 } as const;
 
+export function nextGeographicLod(
+  current: GeographicLod,
+  cameraDistance: number,
+  surfaceVisible: boolean,
+): GeographicLod {
+  if (surfaceVisible) return "50m";
+  if (current === "50m" && cameraDistance < GEOGRAPHY_LOD_THRESHOLDS.enterCloseDistance) return "10m";
+  if (current === "10m" && cameraDistance > GEOGRAPHY_LOD_THRESHOLDS.exitCloseDistance) return "50m";
+  return current;
+}
+
 const geographyPaths: Record<GeographicLod, GeographyAssetPaths> = {
   "50m": {
     land: ["/data/natural-earth/ne_50m_land.geojson"],
@@ -102,27 +113,17 @@ export function loadPreparedGeography(lod: GeographicLod) {
 }
 
 export function createGeographyGeometries(prepared: PreparedGeography) {
-  const createSurface = (positions: Float32Array, indices: Uint32Array) => {
+  const createSurface = (positions: Float32Array, normals: Float32Array, indices: Uint32Array) => {
     const geometry = new BufferGeometry();
     geometry.setAttribute("position", new Float32BufferAttribute(positions, 3));
-    const normals = new Float32Array(positions.length);
-    for (let index = 0; index < normals.length; index += 3) {
-      const x = positions[index];
-      const y = positions[index + 1];
-      const z = positions[index + 2];
-      const length = Math.hypot(x, y, z);
-      normals[index] = x / length;
-      normals[index + 1] = y / length;
-      normals[index + 2] = z / length;
-    }
     geometry.setAttribute("normal", new Float32BufferAttribute(normals, 3));
     geometry.setIndex(new Uint32BufferAttribute(indices, 1));
     geometry.boundingSphere = geographyBounds.clone();
     return geometry;
   };
 
-  const land = createSurface(prepared.landPositions, prepared.landIndices);
-  const lakes = createSurface(prepared.lakePositions, prepared.lakeIndices);
+  const land = createSurface(prepared.landPositions, prepared.landNormals, prepared.landIndices);
+  const lakes = createSurface(prepared.lakePositions, prepared.lakeNormals, prepared.lakeIndices);
 
   const createLines = (positions: Float32Array, indices: Uint32Array) => {
     const geometry = new BufferGeometry();

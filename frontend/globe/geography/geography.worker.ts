@@ -23,8 +23,10 @@ self.addEventListener("message", async (event: MessageEvent<GeographyAssetPaths>
     const prepared = prepareGeography({ land, lakes, coastlines, borders });
     const transfer = [
       prepared.landPositions.buffer,
+      prepared.landNormals.buffer,
       prepared.landIndices.buffer,
       prepared.lakePositions.buffer,
+      prepared.lakeNormals.buffer,
       prepared.lakeIndices.buffer,
       prepared.coastlinePositions.buffer,
       prepared.coastlineIndices.buffer,

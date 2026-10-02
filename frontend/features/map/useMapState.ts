@@ -6,6 +6,7 @@ import type { PipelineFuel } from "@/features/pipelines/model";
 import { EMPTY_PIPELINE_STATUS_FILTERS, type PipelineStatusFilters } from "@/features/pipelines/filters";
 import { EMPTY_ORBITAL_FILTERS, type OrbitalFilterGroup, type OrbitalFilters } from "@/features/orbital/filters";
 import { resolveSelection, type SelectionData, type SelectionKey } from "./selection";
+import { INITIAL_VISUAL_LAYER_STATE, toggleVisualLayer, type VisualLayerId } from "./visualLayers";
 
 export function useMapState() {
   const [earthquakesVisible, setEarthquakesVisible] = useState(false);
@@ -15,9 +16,12 @@ export function useMapState() {
   const [pipelineStatusFilters, setPipelineStatusFilters] = useState<PipelineStatusFilters>(EMPTY_PIPELINE_STATUS_FILTERS);
   const [orbitalFilters, setOrbitalFilters] = useState<OrbitalFilters>(EMPTY_ORBITAL_FILTERS);
   const [selection, setSelection] = useState<SelectionKey | null>(null);
+  const [visualLayers, setVisualLayers] = useState(INITIAL_VISUAL_LAYER_STATE);
 
   const toggleEarthquakes = useCallback(() => setEarthquakesVisible((visible) => !visible), []);
   const toggleFires = useCallback(() => setFiresVisible((visible) => !visible), []);
+  const toggleVisualLayerById = useCallback((layer: VisualLayerId) =>
+    setVisualLayers((current) => toggleVisualLayer(current, layer)), []);
   const toggleOrbitalMode = useCallback((mode: OrbitalMode) => setEnabledOrbitalModes((current) =>
     current.includes(mode) ? current.filter((item) => item !== mode) : [...current, mode]), []);
   const togglePipelineFuel = useCallback((fuel: PipelineFuel) => setEnabledPipelineFuels((current) =>
@@ -36,7 +40,7 @@ export function useMapState() {
   const reconcileSelection = useCallback((data: SelectionData) => setSelection((current) =>
     current && !resolveSelection(current, data) ? null : current), []);
 
-  return { earthquakesVisible, firesVisible, enabledOrbitalModes, enabledPipelineFuels, pipelineStatusFilters, orbitalFilters, selection,
-    toggleEarthquakes, toggleFires, toggleOrbitalMode, togglePipelineFuel, changePipelineStatusFilters, reconcilePipelineStatusFilters,
+  return { earthquakesVisible, firesVisible, visualLayers, enabledOrbitalModes, enabledPipelineFuels, pipelineStatusFilters, orbitalFilters, selection,
+    toggleEarthquakes, toggleFires, toggleVisualLayer: toggleVisualLayerById, toggleOrbitalMode, togglePipelineFuel, changePipelineStatusFilters, reconcilePipelineStatusFilters,
     changeOrbitalFilter, select, clearSelection, reconcileSelection };
 }
