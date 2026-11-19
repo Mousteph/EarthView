@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, type RefObject } from "react";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import {
   BufferGeometry,
+  Color,
   Float32BufferAttribute,
   Group,
   Points,
@@ -12,22 +13,23 @@ import {
   type Raycaster,
   Vector3,
 } from "three";
-import type { GeoEvent } from "@/shared/geoEvent";
+import type { GeoPoint } from "@/shared/geoEvent";
 import { geoToVector3 } from "@/globe/geo";
 import { readDesignColor, type DesignColorToken } from "@/shared/designTokens";
 import type { HoverKey } from "@/features/map/hover";
 import { ScreenSpatialIndex } from "@/globe/interaction/ScreenSpatialIndex";
 
-type PointLayerProps<T extends GeoEvent> = {
+type PointLayerProps<T extends GeoPoint> = {
   readonly entities: readonly T[];
   readonly selectedId: string | null;
   readonly visible: boolean;
   readonly colorToken: DesignColorToken;
   readonly ringed?: boolean;
-  readonly layerType: "earthquakes" | "fires";
+  readonly layerType: "earthquakes" | "fires" | "severe-events";
   readonly hoveredId: string | null;
   readonly sizeFor: (entity: T) => number;
   readonly opacityFor?: (entity: T) => number;
+  readonly colorTokenFor?: (entity: T) => DesignColorToken;
   readonly onSelect: (id: string) => void;
   readonly onHover: (key: HoverKey, clientX: number, clientY: number, distance: number, event: PointerEvent) => void;
   readonly onHoverEnd: (key: HoverKey) => void;
@@ -63,6 +65,7 @@ type PointMaterialOptions = {
   readonly ringed: boolean;
   readonly selected?: boolean;
   readonly cacheKey: string;
+  readonly vertexColors: boolean;
 };
 
 function createPointMaterial({
@@ -71,12 +74,14 @@ function createPointMaterial({
   ringed,
   selected = false,
   cacheKey,
+  vertexColors,
 }: PointMaterialOptions) {
   const material = new PointsMaterial({
     depthWrite: false,
     size,
     sizeAttenuation: false,
     transparent: true,
+    vertexColors,
     opacity,
   });
   const markerShape = ringed
@@ -108,8 +113,20 @@ function createPointMaterial({
       "#include <common>\nvarying float vMarkerOpacity;",
     );
   };
-  material.customProgramCacheKey = () => `${cacheKey}-${ringed}`;
+  material.customProgramCacheKey = () => `${cacheKey}-${ringed}-${vertexColors}`;
   return material;
+}
+
+function updatePointColors<T extends GeoPoint>(geometry: BufferGeometry, entities: readonly T[], colorTokenFor?: (entity: T) => DesignColorToken) {
+  if (!colorTokenFor) return;
+  const colors = new Float32Array(entities.length * 3);
+  const color = new Color();
+  entities.forEach((entity, index) => {
+    color.setStyle(readDesignColor(colorTokenFor(entity)));
+    color.toArray(colors, index * 3);
+  });
+  geometry.setAttribute("color", new Float32BufferAttribute(colors, 3));
+  geometry.attributes.color.needsUpdate = true;
 }
 
 function SelectedPointProjection({
@@ -166,7 +183,7 @@ function SelectedPointProjection({
   return null;
 }
 
-export function PointLayer<T extends GeoEvent>({
+export function PointLayer<T extends GeoPoint>({
   entities,
   selectedId,
   visible,
@@ -176,6 +193,7 @@ export function PointLayer<T extends GeoEvent>({
   hoveredId,
   sizeFor,
   opacityFor,
+  colorTokenFor,
   onSelect,
   onHover,
   onHoverEnd,
@@ -221,7 +239,7 @@ export function PointLayer<T extends GeoEvent>({
       cameraProjection: camera.projectionMatrix.elements,
       objectWorld: this.matrixWorld.elements,
       cameraDistance: camera.position.length(),
-      source: positions,
+      source: geometry,
     };
     if (picking.index.isStale(snapshot)) {
       picking.index.reset(snapshot);
@@ -251,6 +269,7 @@ export function PointLayer<T extends GeoEvent>({
     let bestDistance = pointPickRadiusPixels * pointPickRadiusPixels;
     let bestDepth = Infinity;
     for (const index of candidates) {
+      if (opacities?.[index] === 0) continue;
       const distance = (picking.x[index] - pointerX) ** 2 + (picking.y[index] - pointerY) ** 2;
       if (distance < bestDistance || (distance === bestDistance && picking.depth[index] < bestDepth)) {
         bestIndex = index;
@@ -267,32 +286,35 @@ export function PointLayer<T extends GeoEvent>({
         index: bestIndex,
       } as Intersection);
     }
-  }, [camera, cameraPositionForPick, picking, pointer, positions, projectedPoint, size.height, size.width, worldPoint]);
+  }, [camera, cameraPositionForPick, picking, pointer, positions, opacities, geometry, projectedPoint, size.height, size.width, worldPoint]);
   const selectedIndex = entities.findIndex((entity) => entity.id === selectedId);
   const hoveredIndex = entities.findIndex((entity) => entity.id === hoveredId);
   const selectedGeometry = useMemo(
-    () => selectedIndex < 0 ? null : createPointGeometry([positions[selectedIndex]], [sizes[selectedIndex]]),
-    [positions, selectedIndex, sizes],
+    () => selectedIndex < 0 ? null : createPointGeometry([positions[selectedIndex]], [sizes[selectedIndex]], [opacities?.[selectedIndex] === 0 ? 0 : 1]),
+    [positions, selectedIndex, sizes, opacities],
   );
   const hoverGeometry = useMemo(() => createPointGeometry([new Vector3()], [1]), []);
   const markerMaterial = useMemo(() => createPointMaterial({
     size: ringed ? 6.8 : 4.2,
     opacity: opacityFor ? 1 : 0.9,
     ringed,
-    cacheKey: "earthview-data-points-v4",
-  }), [opacityFor, ringed]);
+    cacheKey: "earthview-data-points-v5",
+    vertexColors: Boolean(colorTokenFor),
+  }), [colorTokenFor, opacityFor, ringed]);
   const selectedMaterial = useMemo(() => createPointMaterial({
     size: ringed ? 9.5 : 6.5,
     ringed,
     selected: true,
-    cacheKey: "earthview-selected-data-points-v4",
-  }), [ringed]);
+    cacheKey: "earthview-selected-data-points-v5",
+    vertexColors: Boolean(colorTokenFor),
+  }), [colorTokenFor, ringed]);
   const hoverMaterial = useMemo(() => createPointMaterial({
     size: ringed ? 8.1 : 4.8,
     opacity: 0.96,
     ringed,
-    cacheKey: "earthview-hover-data-points-v2",
-  }), [ringed]);
+    cacheKey: "earthview-hover-data-points-v3",
+    vertexColors: Boolean(colorTokenFor),
+  }), [colorTokenFor, ringed]);
 
   useEffect(() => () => geometry.dispose(), [geometry]);
   useEffect(() => () => selectedGeometry?.dispose(), [selectedGeometry]);
@@ -308,16 +330,22 @@ export function PointLayer<T extends GeoEvent>({
     invalidate();
   }, [colorToken, hoverMaterial, invalidate, markerMaterial, selectedMaterial]);
   useEffect(() => {
+    updatePointColors(geometry, entities, colorTokenFor);
+    if (selectedGeometry && selectedIndex >= 0) updatePointColors(selectedGeometry, [entities[selectedIndex]], colorTokenFor);
+    invalidate();
+  }, [colorTokenFor, entities, geometry, invalidate, selectedGeometry, selectedIndex]);
+  useEffect(() => {
     if (hoveredIndex < 0) return;
     const point = positions[hoveredIndex];
     const position = hoverGeometry.getAttribute("position") as Float32BufferAttribute;
     const markerSize = hoverGeometry.getAttribute("markerSize") as Float32BufferAttribute;
     position.setXYZ(0, point.x, point.y, point.z);
     markerSize.setX(0, sizes[hoveredIndex]);
+    updatePointColors(hoverGeometry, [entities[hoveredIndex]], colorTokenFor);
     position.needsUpdate = true;
     markerSize.needsUpdate = true;
     invalidate();
-  }, [hoverGeometry, hoveredIndex, invalidate, positions, sizes]);
+  }, [colorTokenFor, entities, hoverGeometry, hoveredIndex, invalidate, positions, sizes]);
   useEffect(() => {
     invalidate();
   }, [geometry, invalidate, selectedGeometry, visible]);
@@ -353,7 +381,7 @@ export function PointLayer<T extends GeoEvent>({
         }}
         renderOrder={2}
       />
-      {hoveredIndex >= 0 && hoveredId !== selectedId ? <points geometry={hoverGeometry} material={hoverMaterial} raycast={() => null} frustumCulled={false} renderOrder={2.5} /> : null}
+      {hoveredIndex >= 0 && opacities?.[hoveredIndex] !== 0 && hoveredId !== selectedId ? <points geometry={hoverGeometry} material={hoverMaterial} raycast={() => null} frustumCulled={false} renderOrder={2.5} /> : null}
       {selectedGeometry ? <points geometry={selectedGeometry} material={selectedMaterial} raycast={() => null} renderOrder={3} /> : null}
       {selectedGeometry ? (
         <SelectedPointProjection

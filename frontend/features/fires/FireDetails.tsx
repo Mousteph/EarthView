@@ -14,7 +14,7 @@ export function FireDetails({ event, detailsRef, onClose }: {
   const satellite = satelliteNames[event.satellite ?? ""] ?? event.satellite;
   const source = [satellite, event.instrument].filter(Boolean).join(" / ");
   return <InspectionPanel ariaLabel="Selected active fire" closeLabel="Close selected event" detailsRef={detailsRef} onClose={onClose}>
-    <div className="event-details-heading"><span>Active fire</span></div>
+    <div className="event-details-heading"><span>NASA FIRMS · Active fire detection</span></div>
     <div className="event-primary">
       <div className="fire-primary-label"><span className="event-primary-caption">Fire Radiative Power</span>
         <span>{event.frp === null ? "Unavailable" : formatFirePower(event.frp)}</span></div>
@@ -25,5 +25,6 @@ export function FireDetails({ event, detailsRef, onClose }: {
       {source ? <div><dt>Satellite</dt><dd>{source}</dd></div> : null}
       <div><dt>Coordinates</dt><dd>{formatCoordinates(event.lat, event.lon)}</dd></div>
     </dl></div>
+    <div className="orbital-detail-section"><h3>Sources</h3><p className="severe-event-note"><a href="https://firms.modaps.eosdis.nasa.gov/" target="_blank" rel="noreferrer">NASA FIRMS</a> · Satellite heat detection; it is not necessarily a wildfire incident.</p></div>
   </InspectionPanel>;
 }

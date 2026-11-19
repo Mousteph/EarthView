@@ -2,10 +2,15 @@
 
 import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
-import { memo, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { memo, Suspense, useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { KTX2Loader } from "three-stdlib";
-import type { Earthquake } from "@/features/earthquakes/model";
+import type { MergedEarthquake as Earthquake } from "@/features/earthquakes/model";
 import type { Fire } from "@/features/fires/model";
+import { SevereEventOverlays } from "./severe-events/SevereEventOverlays";
+import { droughtAreaEventIds } from "@/features/severe-events/enrichment";
+import type { SevereEventOverlay } from "@/features/severe-events/enrichment";
+import type { SevereEvent } from "@/features/severe-events/model";
+import type { DesignColorToken } from "@/shared/designTokens";
 import type { OrbitalObject, SelectedSatellitePosition } from "@/features/orbital/model";
 import type { Pipeline } from "@/features/pipelines/model";
 import type { HoverKey } from "@/features/map/hover";
@@ -35,6 +40,11 @@ type GlobeSceneProps = {
   readonly selectedEarthquakeId: string | null;
   readonly fires: readonly Fire[];
   readonly firesVisible: boolean;
+  readonly severeEventOverlays: readonly SevereEventOverlay[];
+  readonly severeEvents: readonly SevereEvent[];
+  readonly enabledSevereEventCategories: readonly string[];
+  readonly severeEventColorFor: (event: SevereEvent) => DesignColorToken;
+  readonly selectedSevereEventId: string | null;
   readonly selectedFireId: string | null;
   readonly satellites: readonly OrbitalObject[];
   readonly satellitesVisible: boolean;
@@ -45,6 +55,7 @@ type GlobeSceneProps = {
   readonly selectedPipelineId: string | null;
   readonly onEarthquakeSelect: (earthquakeId: string) => void;
   readonly onFireSelect: (fireId: string) => void;
+  readonly onSevereEventSelect: (eventId: string) => void;
   readonly onSatelliteSelect: (satelliteId: string) => void;
   readonly onPipelineSelect: (pipelineId: string) => void;
   readonly onSelectedSatelliteData: (position: SelectedSatellitePosition | null) => void;
@@ -57,7 +68,7 @@ type GlobeSceneProps = {
 
 export type MapScale = { readonly distanceKm: number; readonly widthPx: number };
 
-const earthquakeSize = (earthquake: Earthquake) => Math.min(3, Math.max(0.75, 0.75 + Math.max(0, earthquake.magnitude) * 0.35));
+const earthquakeSize = (earthquake: Earthquake) => Math.min(3, Math.max(0.75, 0.75 + Math.max(0, earthquake.magnitude ?? 0) * 0.35));
 const fireSize = (fire: Fire) => Math.min(2.2, Math.max(0.75, 0.8 + Math.log1p(fire.frp ?? 0) * 0.22));
 const fireOpacity = (fire: Fire) => fire.frp === null
   ? 0.65
@@ -142,6 +153,11 @@ function GlobeSceneComponent({
   fires,
   firesVisible,
   selectedFireId,
+  severeEvents,
+  severeEventOverlays,
+  enabledSevereEventCategories,
+  severeEventColorFor,
+  selectedSevereEventId,
   satellites,
   satellitesVisible,
   satelliteVisibility,
@@ -151,6 +167,7 @@ function GlobeSceneComponent({
   selectedPipelineId,
   onEarthquakeSelect,
   onFireSelect,
+  onSevereEventSelect,
   onSatelliteSelect,
   onPipelineSelect,
   onSelectedSatelliteData,
@@ -160,6 +177,10 @@ function GlobeSceneComponent({
   onHover,
   onHoverEnd,
 }: GlobeSceneProps) {
+  const droughtAreas = useMemo(() => droughtAreaEventIds(severeEventOverlays, severeEvents), [severeEventOverlays, severeEvents]);
+  const severeEventOpacity = useCallback((event: SevereEvent) => event.eventType === "DR" && droughtAreas.has(event.id) ? 0 : 0.9, [droughtAreas]);
+  const selectedHasArea = severeEventOverlays.some((overlay) => overlay.eventId === selectedSevereEventId && overlay.kind !== "track");
+  const severeEventSize = useCallback((event: SevereEvent) => selectedHasArea && event.id === selectedSevereEventId ? 1.2 : 3.2, [selectedHasArea, selectedSevereEventId]);
   const debugEnabled = usePerformanceDebugEnabled();
   const [performance, setPerformance] = useState<PerformanceSnapshot | null>(null);
   const [activeLod, setActiveLod] = useState<GeographicLod>("50m");
@@ -204,6 +225,22 @@ function GlobeSceneComponent({
             sizeFor={fireSize}
             opacityFor={fireOpacity}
             onSelect={onFireSelect}
+            onHover={onHover}
+            onHoverEnd={onHoverEnd}
+            onSelectedPositionChange={onSelectedPositionChange}
+          />
+          <SevereEventOverlays overlays={severeEventOverlays} selectedId={selectedSevereEventId} onSelect={onSevereEventSelect} />
+          <PointLayer
+            entities={severeEvents}
+            selectedId={selectedSevereEventId}
+            visible={enabledSevereEventCategories.length > 0}
+            colorToken={DESIGN_COLOR_TOKENS.white}
+            layerType="severe-events"
+            hoveredId={hovered?.type === "severe-events" ? hovered.id : null}
+            sizeFor={severeEventSize}
+            opacityFor={severeEventOpacity}
+            colorTokenFor={severeEventColorFor}
+            onSelect={onSevereEventSelect}
             onHover={onHover}
             onHoverEnd={onHoverEnd}
             onSelectedPositionChange={onSelectedPositionChange}

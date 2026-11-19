@@ -13,7 +13,7 @@ const sources = [
     category: "Live data",
     title: "Earthquakes",
     provider: "U.S. Geological Survey (USGS)",
-    description: "EarthView uses the USGS all-earthquakes, past-day GeoJSON feed. Event locations, magnitudes, times, and depths come from this feed.",
+    description: "EarthView uses the USGS all-earthquakes, past-seven-day GeoJSON feed. The Earthquakes category combines this feed with GDACS within a rolling seven-day occurrence window. Explicit provider IDs are matched first; otherwise, a unique candidate must be within 60 seconds, 50 km, and 0.5 magnitude. Inferred associations are labeled. USGS locations and measurements are preferred, and both reports remain attributed. Enabled earthquake feeds refresh every six minutes, preserving successful data during partial provider failures.",
     href: "https://earthquake.usgs.gov/earthquakes/feed/v1.0/geojson.php",
     linkLabel: "View USGS feed documentation",
   },
@@ -29,6 +29,15 @@ const sources = [
   {
     number: "03",
     category: "Live data",
+    title: "Severe events",
+    provider: "Global Disaster Alert and Coordination System, GDACS",
+    description: "Recent alerts from the past 7 days, plus all ongoing droughts. Colored points mark reported locations, with available fire affected areas visible when Wildfires is enabled. Cyclone tracks distinguish recorded and forecast paths; drought areas show agricultural drought impact risk, whose underlying indicator updates every ten days. Selected events show available wind zones and uncertainty, reported flood/fire areas, or earthquake shaking contours, with dated measurements and exposure reports. Reference circles are excluded. GDACS feeds and enrichment refresh every six minutes; missing geometry leaves the point visible. Earthquakes share one view with USGS; source filters select providers, and GDACS alert filters select assessed reports. Empty alert filters also include USGS-only earthquakes. Shaking contours use outlines without shaded fills. Active Fires remains an independent category of NASA FIRMS satellite heat detections, while Wildfires contains GDACS incidents and affected areas. Earthquake inclusion uses occurrence time; other recent alerts use update time.",
+    href: "https://data.gdacs.org/Documents/2025/GDACS_API_quickstart_v1.pdf",
+    linkLabel: "View GDACS API guide",
+  },
+  {
+    number: "04",
+    category: "Live data",
     title: "Orbital objects",
     provider: "CelesTrak",
     description: "CelesTrak GP orbital elements and SATCAT catalog records supply the available active satellites, debris, and rocket bodies. EarthView propagates positions locally with SGP4. Mission and orbit labels are inferred; debris and rocket-body name searches are not a complete catalog.",
@@ -36,7 +45,7 @@ const sources = [
     linkLabel: "View CelesTrak SATCAT formats",
   },
   {
-    number: "04",
+    number: "05",
     category: "Infrastructure",
     title: "Gas pipelines",
     provider: "Global Energy Monitor (GEM)",
@@ -45,7 +54,7 @@ const sources = [
     linkLabel: "View the Global Gas Infrastructure Tracker",
   },
   {
-    number: "05",
+    number: "06",
     category: "Infrastructure",
     title: "Oil pipelines",
     provider: "Global Energy Monitor (GEM)",
@@ -54,7 +63,7 @@ const sources = [
     linkLabel: "View the Global Oil Infrastructure Tracker",
   },
   {
-    number: "06",
+    number: "07",
     category: "Base geography",
     title: "Land, lakes, islands, and borders",
     provider: "Natural Earth",
@@ -63,7 +72,7 @@ const sources = [
     linkLabel: "View Natural Earth data and terms",
   },
   {
-    number: "07",
+    number: "08",
     category: "Base geography",
     title: "Land and seafloor relief",
     provider: "GEBCO Bathymetric Compilation Group (2026), GEBCO_2026 Grid",
@@ -72,7 +81,7 @@ const sources = [
     linkLabel: "View GEBCO_2026 Grid citation",
   },
   {
-    number: "08",
+    number: "09",
     category: "Globe overlays",
     title: "Surface land appearance",
     provider: "Natural Earth",
@@ -81,7 +90,7 @@ const sources = [
     linkLabel: "View Natural Earth Cross-Blended Hypsometric Tints",
   },
   {
-    number: "09",
+    number: "10",
     category: "Globe overlays",
     title: "Country and city labels",
     provider: "Natural Earth",

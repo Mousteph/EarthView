@@ -33,6 +33,8 @@ class NormalizeEarthquakeTests(TestCase):
                 location="10 km N of Example, Testland",
                 time=1_790_000_000_000,
                 depth=8.5,
+                sourceIds=["us7000example"],
+                sourceUrl="https://earthquake.usgs.gov/earthquakes/eventpage/us7000example",
             ),
         )
 
