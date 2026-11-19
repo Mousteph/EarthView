@@ -34,6 +34,8 @@ class NormalizeFireTests(TestCase):
         self.assertIsNone(fire.frp)
         self.assertIsNone(fire.confidence)
         self.assertIsNone(self.data_layer.normalize({**row, "latitude": "91"}))
+        self.assertIsNotNone(self.data_layer.normalize({**row, "confidence": None, "satellite": None, "scan": None}))
+        self.assertIsNone(self.data_layer.normalize({**row, "acq_time": None}))
 
 
 class FireEndpointTests(TestCase):
@@ -70,11 +72,9 @@ class FirmsFeedTests(IsolatedAsyncioTestCase):
         )
         with patch.object(FireDataLayer, "_read_map_key", return_value="test-key"):
             layer = FireDataLayer()
-        FireDataLayer._cached_fires = None
-        FireDataLayer._cache_expires_at = 0.0
         with patch("app.data_layer.fires.fire_data_layer.httpx.AsyncClient", return_value=client):
             first = await layer.fetch()
-            second = await FireDataLayer().fetch()
+            second = await layer.fetch()
 
         self.assertEqual(len(first), 1)
         self.assertEqual(first, second)
@@ -82,3 +82,10 @@ class FirmsFeedTests(IsolatedAsyncioTestCase):
         client.get.assert_awaited_once_with(
             "https://firms.modaps.eosdis.nasa.gov/api/area/csv/test-key/VIIRS_NOAA20_NRT/world/1"
         )
+
+    async def test_caches_are_isolated_between_instances(self) -> None:
+        with patch.object(FireDataLayer, "_read_map_key", return_value="test-key"):
+            first, second = FireDataLayer(), FireDataLayer()
+        first._cached_fires = []
+        first._cache_expires_at = float("inf")
+        self.assertIsNone(second._cached_fires)

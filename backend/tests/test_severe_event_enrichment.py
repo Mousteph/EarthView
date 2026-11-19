@@ -83,6 +83,15 @@ class EnrichmentNormalizerTests(TestCase):
 
 
 class EnrichmentFetchTests(IsolatedAsyncioTestCase):
+    async def test_empty_drought_map_geometry_falls_back_to_geometry_endpoint(self):
+        layer = SevereEventDataLayer()
+        layer._drought_geometry['DR:12'] = []
+        payload = geometry(Class='Poly_area')
+        with patch.object(layer, '_cached_request', new=AsyncMock(return_value=payload)) as request:
+            overlays = await layer._geometry(event())
+        self.assertEqual([overlay.kind for overlay in overlays], ['drought-area'])
+        request.assert_awaited_once()
+
     async def test_cache_episode_invalidation_and_request_deduplication(self):
         layer = SevereEventDataLayer()
         with patch.object(layer, '_request', new=AsyncMock(return_value={'features': []})) as request:

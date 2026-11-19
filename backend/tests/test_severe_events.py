@@ -66,6 +66,10 @@ class SevereEventNormalizerTests(TestCase):
         self.assertIsNone(event.severity)
         self.assertIsNone(event.alertLevel)
         self.assertIsNone(SevereEventDataLayer.normalize_feature(feature(event_type="XX")))
+        self.assertIsNone(SevereEventDataLayer.normalize_feature(feature(event_type=[])))
+        for event_id in [True, "abc", "-1", "١"]:
+            self.assertIsNone(SevereEventDataLayer.normalize_feature(feature(event_id=event_id)))
+        self.assertEqual(SevereEventDataLayer.normalize_feature(feature(event_id="0012")).id, "FL:12")
         self.assertIsNone(SevereEventDataLayer.normalize_feature(feature(coordinates=[181, 0])))
         self.assertIsNone(SevereEventDataLayer.normalize_feature(feature(coordinates=["bad", 0])))
         self.assertIsNone(SevereEventDataLayer.normalize_feature(feature(updated="")))

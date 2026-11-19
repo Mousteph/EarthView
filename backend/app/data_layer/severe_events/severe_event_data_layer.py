@@ -120,6 +120,8 @@ class SevereEventDataLayer:
             return None
 
         event_type = properties.get("eventtype")
+        if not isinstance(event_type, str):
+            return None
         if event_type == "FF":
             event_type = "WF"
         category = cls.categories.get(event_type)
@@ -128,10 +130,12 @@ class SevereEventDataLayer:
         position = cls._position(geometry.get("coordinates"))
         started_at = cls._timestamp(properties.get("fromdate"))
         updated_at = cls._timestamp(properties.get("datemodified"))
-        if (category is None or not isinstance(event_id, (str, int)) or not str(event_id).strip()
+        if (category is None or isinstance(event_id, bool) or not isinstance(event_id, (str, int))
+                or not str(event_id).isascii() or not str(event_id).isdigit()
                 or not isinstance(title, str) or not title.strip() or position is None
                 or started_at is None or updated_at is None):
             return None
+        event_id = str(event_id).lstrip("0") or "0"
 
         alert = properties.get("alertlevel")
         alert_level = alert.title() if isinstance(alert, str) and alert.lower() in {"green", "orange", "red"} else None
@@ -142,7 +146,7 @@ class SevereEventDataLayer:
         country = cls._text(properties.get("country"))
         description = cls._text(properties.get("description"))
         return SevereEvent(
-            id=f"{event_type}:{str(event_id).strip()}",
+            id=f"{event_type}:{event_id}",
             eventType=event_type,
             episodeId=cls._episode_id(properties.get("episodeid")),
             title=f"Drought · {properties['eventname'].strip()}" if event_type == "DR" and cls._text(properties.get("eventname")) else title.strip().rstrip(", "),
@@ -196,7 +200,7 @@ class SevereEventDataLayer:
     async def _geometry(self, event: SevereEvent) -> list:
         if event.eventType == "DR":
             cached = self._drought_geometry.get(event.id)
-            if cached is not None and all(o.episodeId == event.episodeId for o in cached):
+            if cached and all(o.episodeId == event.episodeId for o in cached):
                 return cached
         payload = await self._cached_request(event, "geometry", "Polygons/getgeometry", {
             "eventtype": event.eventType, "eventid": event.id.split(":")[1], "episodeid": event.episodeId})

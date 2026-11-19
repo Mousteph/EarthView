@@ -26,6 +26,7 @@ class PipelineNormalizer:
         source_type = cls._text(properties.get("Fuel")) or ""
         pipeline_type: PipelineType = "Gas" if fuel == "gas" else "NGL" if re.search(r"\bNGL\b", source_type, re.IGNORECASE) else "Oil"
         name = cls._text(properties.get("PipelineName")) or cls._text(properties.get("Name")) or f"Pipeline {project_id}"
+        length = cls._number(properties.get("LengthKnownKm"))
 
         return Pipeline(
             id=f"{fuel}:{project_id}",
@@ -39,7 +40,7 @@ class PipelineNormalizer:
             owner=cls._text(properties.get("Owner")),
             parent=cls._text(properties.get("Parent")),
             operator=cls._text(properties.get("Operator")),
-            lengthKm=cls._number(properties.get("LengthKnownKm")) or cls._number(properties.get("LengthEstimateKm")),
+            lengthKm=length if length is not None else cls._number(properties.get("LengthEstimateKm")),
             capacity=cls._text(properties.get("Capacity")),
             capacityUnit=cls._text(properties.get("CapacityUnits")),
             startYear=cls._text(properties.get("StartYear1")),

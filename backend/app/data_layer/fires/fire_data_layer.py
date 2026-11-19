@@ -19,16 +19,15 @@ class FireDataLayer:
     area_url = "https://firms.modaps.eosdis.nasa.gov/api/area/csv"
     cache_seconds = 120
     config_path = Path(__file__).resolve().parents[4] / "config.yaml"
-    _cache_lock = asyncio.Lock()
-    _cached_fires: List[Fire] | None = None
-    _cache_expires_at = 0.0
-
     def __init__(self) -> None:
         map_key = self._read_map_key()
         if not map_key:
             raise RuntimeError("FIRMS map key is not configured in config.yaml")
 
         self.url = f"{self.area_url}/{map_key}/{self.source}/world/1"
+        self._cache_lock = asyncio.Lock()
+        self._cached_fires: List[Fire] | None = None
+        self._cache_expires_at = 0.0
 
     @classmethod
     def _read_map_key(cls) -> str | None:
@@ -60,12 +59,15 @@ class FireDataLayer:
                 return None
 
             date = row["acq_date"]
-            acquisition_time = row["acq_time"].zfill(4)
+            acquisition_time = row["acq_time"]
+            if not acquisition_time:
+                return None
+            acquisition_time = acquisition_time.zfill(4)
             timestamp = int(datetime.strptime(f"{date} {acquisition_time}", "%Y-%m-%d %H%M").replace(tzinfo=timezone.utc).timestamp() * 1000)
         except (KeyError, TypeError, ValueError, OverflowError):
             return None
 
-        confidence = {"l": "Low", "n": "Nominal", "h": "High"}.get(row.get("confidence", "").lower())
+        confidence = {"l": "Low", "n": "Nominal", "h": "High"}.get((row.get("confidence") or "").lower())
         try:
             frp = float(row.get("frp", ""))
             if not isfinite(frp) or frp < 0:
@@ -73,7 +75,7 @@ class FireDataLayer:
         except (TypeError, ValueError):
             frp = None
 
-        identity = "|".join(row.get(field, "") for field in (
+        identity = "|".join(row.get(field) or "" for field in (
             "latitude", "longitude", "acq_date", "acq_time", "satellite", "instrument", "scan", "track",
         ))
 
@@ -89,10 +91,9 @@ class FireDataLayer:
         )
 
     async def fetch(self) -> List[Fire]:
-        layer_type = type(self)
-        async with layer_type._cache_lock:
-            if layer_type._cached_fires is not None and time.monotonic() < layer_type._cache_expires_at:
-                return layer_type._cached_fires
+        async with self._cache_lock:
+            if self._cached_fires is not None and time.monotonic() < self._cache_expires_at:
+                return self._cached_fires
 
             async with httpx.AsyncClient(timeout=30) as client:
                 response = await client.get(self.url)
@@ -104,7 +105,7 @@ class FireDataLayer:
                 raise ValueError("FIRMS returned an invalid fire feed")
 
             fires = [fire for row in reader if (fire := self.normalize(row)) is not None]
-            layer_type._cached_fires = fires
-            layer_type._cache_expires_at = time.monotonic() + self.cache_seconds
+            self._cached_fires = fires
+            self._cache_expires_at = time.monotonic() + self.cache_seconds
 
             return fires

@@ -44,6 +44,9 @@ class PipelineNormalizerTests(TestCase):
         self.assertEqual(pipeline.routes, [[(10.0, 20.0), (11.0, 21.0)]])
         self.assertEqual(pipeline.routeAccuracy, "high")
 
+        zero_length = PipelineNormalizer.normalize_feature(feature(LengthKnownKm="0", LengthEstimateKm="130"), "gas")
+        self.assertEqual(zero_length.lengthKm, 0)
+
     def test_accepts_multiline_geometry_and_omits_unmapped_or_invalid_routes(self) -> None:
         multiline = feature(
             geometry_type="MultiLineString",
@@ -86,6 +89,20 @@ class PipelineDataLayerTests(IsolatedAsyncioTestCase):
 
         self.assertTrue(stale.stale)
         self.assertEqual(len(stale.pipelines), 1)
+
+    async def test_failed_initial_load_can_retry_after_one_minute(self) -> None:
+        source = AsyncMock()
+        source.fetch.side_effect = [httpx.ConnectError("offline"), {"features": [feature()]}]
+        layer = PipelineDataLayer(source)
+        with patch.object(layer, "_now_milliseconds", return_value=100_000):
+            with self.assertRaises(httpx.ConnectError):
+                await layer.fetch("gas")
+        with patch.object(layer, "_now_milliseconds", return_value=159_999):
+            with self.assertRaises(httpx.HTTPError):
+                await layer.fetch("gas")
+        with patch.object(layer, "_now_milliseconds", return_value=160_000):
+            self.assertEqual((await layer.fetch("gas")).fuel, "gas")
+        self.assertEqual(source.fetch.await_count, 2)
 
 
 class PipelineEndpointTests(TestCase):

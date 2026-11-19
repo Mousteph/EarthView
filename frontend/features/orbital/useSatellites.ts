@@ -62,6 +62,7 @@ export function useSatellites(visible: boolean, mode: OrbitalMode = "active") {
       if (initialLoad !== undefined) window.clearTimeout(initialLoad);
       window.clearInterval(interval);
       requestId.current += 1;
+      setIsLoading(false);
     };
   }, [data, mode, refresh, visible]);
 

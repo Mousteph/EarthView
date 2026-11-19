@@ -47,7 +47,7 @@ export function usePipelineFeeds(enabledFuels: readonly PipelineFuel[]) {
 
   useEffect(() => {
     const timers = enabledFuels
-      .filter((fuel) => !feeds[fuel].hasLoaded && !feeds[fuel].isLoading)
+      .filter((fuel) => !feeds[fuel].hasLoaded && !feeds[fuel].isLoading && !feeds[fuel].error)
       .map((fuel) => window.setTimeout(() => void refresh(fuel)));
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [enabledFuels, feeds, refresh]);
