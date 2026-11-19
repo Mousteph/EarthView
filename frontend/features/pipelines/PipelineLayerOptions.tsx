@@ -5,6 +5,7 @@ import type { PipelineFeedState, PipelineFuel } from "./model";
 import type { PipelineFuelCounts, PipelineStatusFilters, PipelineStatusOptions } from "./filters";
 import { togglePipelineStatus } from "./filters";
 import { formatCount } from "@/shared/ui/format";
+import { LayerIcon } from "@/shared/ui/LayerIcon";
 
 const options: readonly { readonly fuel: PipelineFuel; readonly label: string }[] = [
   { fuel: "gas", label: "Gas" },
@@ -37,7 +38,7 @@ export function PipelineLayerOptions({ enabledFuels, feeds, statusOptions, selec
       return <section className={`pipeline-fuel pipeline-choice-${fuel}`} key={fuel}>
         <div className="pipeline-fuel-row">
           <button className="pipeline-choice" type="button" aria-pressed={enabled} onClick={() => onToggle(fuel)}>
-            <span className="pipeline-marker" aria-hidden="true" />
+            <LayerIcon className="layer-option-icon" name="route" />
             <span>{label}{enabled && feed.hasLoaded ? <> <output className="pipeline-count">– {formatCount(count)}</output></> : null}</span>
           </button>
           {statusOptions[fuel].length ? <button className="orbital-disclosure" type="button" aria-label={`${isOpen ? "Collapse" : "Expand"} ${label} status filters`}

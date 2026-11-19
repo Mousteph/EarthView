@@ -5,6 +5,7 @@ import type { OrbitalMode } from "./model";
 import type { OrbitalFilterGroup } from "./filters";
 import { missionTypeColor } from "./colors";
 import { formatCount } from "@/shared/ui/format";
+import { LayerIcon, type LayerIconName } from "@/shared/ui/LayerIcon";
 export type OrbitalControls = {
   readonly enabledModes: readonly OrbitalMode[];
   readonly onModeToggle: (mode: OrbitalMode) => void;
@@ -19,10 +20,10 @@ export function OrbitalLayerOptions({ controls, summaryItems }: { readonly contr
   const [openModes, setOpenModes] = useState<ReadonlySet<OrbitalMode>>(() => new Set());
   const [openGroups, setOpenGroups] = useState<ReadonlySet<OrbitalFilterGroup>>(() => new Set());
   const groups: readonly [OrbitalFilterGroup, string][] = [["missionTypes", "Mission type"], ["orbitClasses", "Orbit class"], ["constellations", "Constellation / group"]];
-  const modes: readonly [OrbitalMode, string, string][] = [
-    ["active", "Active", "satellite"],
-    ["debris", "Debris", "debris"],
-    ["rocket_bodies", "Rocket Bodies", "rocket-body"],
+  const modes: readonly [OrbitalMode, string, string, LayerIconName][] = [
+    ["active", "Active", "satellite", "satellite"],
+    ["debris", "Debris", "debris", "orbit"],
+    ["rocket_bodies", "Rocket Bodies", "rocket-body", "rocket"],
   ];
   function toggleModeOpen(mode: OrbitalMode) {
     setOpenModes((current) => {
@@ -40,13 +41,13 @@ export function OrbitalLayerOptions({ controls, summaryItems }: { readonly contr
   }
   return <div className="orbital-options" aria-label="Orbital object choices">
     <div className="orbital-category-list">
-      {modes.map(([mode, label, color]) => {
+      {modes.map(([mode, label, color, icon]) => {
         const isOpen = openModes.has(mode);
         const summary = summaryItems.find((item) => item.id === mode);
         return <section className={"orbital-category orbital-category-" + color} key={mode}>
           <div className="orbital-category-row">
             <button className="orbital-category-choice" type="button" aria-pressed={controls.enabledModes.includes(mode)} onClick={() => controls.onModeToggle(mode)}>
-              <span className="orbital-category-marker" aria-hidden="true" />
+              <LayerIcon className="layer-option-icon" name={icon} />
               <span>{label}{controls.enabledModes.includes(mode) && summary?.hasLoaded ? <> <output className="orbital-category-count">– {formatCount(summary.count)}</output></> : null}</span>
             </button>
             {mode === "active" ? <button className="orbital-disclosure" type="button" aria-label={(isOpen ? "Collapse " : "Expand ") + label + " filters"} aria-expanded={isOpen} onClick={() => toggleModeOpen(mode)}>

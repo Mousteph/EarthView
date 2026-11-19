@@ -3,6 +3,13 @@
 import { useCallback, useEffect, useState, type RefCallback, type RefObject, type TransitionEvent } from "react";
 import { EarthquakeDetails } from "@/features/earthquakes/EarthquakeDetails";
 import { FireDetails } from "@/features/fires/FireDetails";
+import { SevereEventDetails } from "@/features/severe-events/SevereEventDetails";
+import { SevereEventLayerOptions } from "@/features/severe-events/SevereEventLayerOptions";
+import type { EventEnrichment } from "@/features/severe-events/enrichment";
+import type { SevereEventCategoryOption } from "@/features/severe-events/categories";
+import type { MergedEarthquake, EarthquakeSource } from "@/features/earthquakes/model";
+import type { SevereEvent } from "@/features/severe-events/model";
+import type { SevereEventCategoryCounts, SevereAlertFilters, SevereAlertLevel } from "@/features/severe-events/filters";
 import { OrbitalDetails } from "@/features/orbital/OrbitalDetails";
 import { OrbitalLayerOptions, type OrbitalControls, type OrbitalSummaryItem } from "@/features/orbital/OrbitalLayerOptions";
 import { PipelineDetails } from "@/features/pipelines/PipelineDetails";
@@ -15,9 +22,10 @@ import type { SelectedEvent } from "./selection";
 export type LayerControl = LayerRowModel;
 type ControlsPhase = "expanded" | "collapsing" | "shrinking" | "compact" | "expanding" | "revealing" | "appearing";
 
-export function LayerControls({ layers, selected, detailsRef, onClose, orbitalControls, summaryItems, pipelineControls,
+export function LayerControls({ severeEventDetails, layers, selected, detailsRef, onClose, orbitalControls, summaryItems, pipelineControls, severeEventControls,
   issPlayerVisible, issPlayerDetached, issVideoUnavailable, onInlinePlayerHost, onDetachISSPlayer,
   onRetryISSPlayer, onShowISSPlayer }: {
+  readonly severeEventDetails: { readonly data: EventEnrichment | null; readonly loading: boolean; readonly error: string | null; readonly stale: boolean };
   readonly layers: readonly LayerControl[];
   readonly selected: SelectedEvent | null;
   readonly detailsRef: RefObject<HTMLElement | null>;
@@ -40,10 +48,25 @@ export function LayerControls({ layers, selected, detailsRef, onClose, orbitalCo
     readonly onToggle: (fuel: PipelineFuel) => void;
     readonly onStatusChange: (fuel: PipelineFuel, values: readonly string[]) => void;
   };
+  readonly severeEventControls: {
+    readonly events: readonly SevereEvent[];
+    readonly alertFilters: SevereAlertFilters;
+    readonly onAlertChange: (categoryId: string, values: readonly SevereAlertLevel[]) => void;
+    readonly categories: readonly SevereEventCategoryOption[];
+    readonly enabledCategories: readonly string[];
+    readonly counts: SevereEventCategoryCounts;
+    readonly loadedCategories: readonly string[];
+    readonly earthquakes: readonly MergedEarthquake[];
+    readonly sourceFilters: readonly EarthquakeSource[];
+    readonly onSourcesChange: (sources: readonly EarthquakeSource[]) => void;
+    readonly errors: Readonly<Record<string, string | null>>;
+    readonly onToggle: (categoryId: string) => void;
+  };
 }) {
   const [controlsPhase, setControlsPhase] = useState<ControlsPhase>("expanded");
   const [orbitalOpen, setOrbitalOpen] = useState(false);
   const [pipelinesOpen, setPipelinesOpen] = useState(false);
+  const [severeEventsOpen, setSevereEventsOpen] = useState(false);
   const compact = controlsPhase === "compact" || controlsPhase === "expanding" || controlsPhase === "shrinking";
   const transitioning = controlsPhase !== "expanded" && controlsPhase !== "compact";
   const expanded = controlsPhase === "expanded" || controlsPhase === "collapsing" || controlsPhase === "revealing" || controlsPhase === "appearing";
@@ -89,15 +112,17 @@ export function LayerControls({ layers, selected, detailsRef, onClose, orbitalCo
       setControlsPhase(compact ? "expanding" : "collapsing");
     }
   };
-  const showLayerOptions = (layer: "satellites" | "pipelines") => {
+  const showLayerOptions = (layer: "satellites" | "pipelines" | "severe-events") => {
     if (compact) {
       if (layer === "satellites") setOrbitalOpen(true);
-      else setPipelinesOpen(true);
+      else if (layer === "pipelines") setPipelinesOpen(true);
+      else setSevereEventsOpen(true);
       setControlsPhase(window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "expanded" : "expanding");
       return;
     }
     if (layer === "satellites") setOrbitalOpen((open) => !open);
-    else setPipelinesOpen((open) => !open);
+    else if (layer === "pipelines") setPipelinesOpen((open) => !open);
+    else setSevereEventsOpen((open) => !open);
   };
   return <>
     <aside className={`layer-controls${compact ? " is-compact" : ""}${controlsPhase === "expanding" ? " is-expanding" : ""}${controlsPhase === "collapsing" ? " is-collapsing" : ""}${controlsPhase === "revealing" ? " is-revealing" : ""}`}
@@ -113,15 +138,17 @@ export function LayerControls({ layers, selected, detailsRef, onClose, orbitalCo
       </div>
       <div className="layer-controls-scroll" id="earthview-layer-list">
         {layers.map((layer) => <LayerRow layer={layer} key={layer.id}
-          expanded={layer.id === "satellites" ? !compact && orbitalOpen : layer.id === "pipelines" ? !compact && pipelinesOpen : undefined}
-          onDisclosure={layer.id === "satellites" ? () => showLayerOptions("satellites") : layer.id === "pipelines" ? () => showLayerOptions("pipelines") : undefined}>
+          expanded={layer.id === "satellites" ? !compact && orbitalOpen : layer.id === "pipelines" ? !compact && pipelinesOpen : layer.id === "severe-events" ? !compact && severeEventsOpen : undefined}
+          onDisclosure={layer.id === "satellites" ? () => showLayerOptions("satellites") : layer.id === "pipelines" ? () => showLayerOptions("pipelines") : layer.id === "severe-events" ? () => showLayerOptions("severe-events") : undefined}>
+          {layer.id === "severe-events" && severeEventsOpen ? <SevereEventLayerOptions {...severeEventControls} /> : null}
           {layer.id === "satellites" && orbitalOpen ? <OrbitalLayerOptions controls={orbitalControls} summaryItems={summaryItems} /> : null}
           {layer.id === "pipelines" && pipelinesOpen ? <PipelineLayerOptions {...pipelineControls} /> : null}
         </LayerRow>)}
       </div>
     </aside>
-    {selected?.type === "earthquakes" ? <EarthquakeDetails event={selected.event} detailsRef={detailsRef} onClose={onClose} />
+    {selected?.type === "earthquakes" ? <EarthquakeDetails enrichment={severeEventDetails} event={selected.event} detailsRef={detailsRef} onClose={onClose} />
       : selected?.type === "fires" ? <FireDetails event={selected.event} detailsRef={detailsRef} onClose={onClose} />
+        : selected?.type === "severe-events" ? <SevereEventDetails enrichment={severeEventDetails} event={selected.event} detailsRef={detailsRef} onClose={onClose} />
         : selected?.type === "satellites" ? <OrbitalDetails event={selected.event} mode={selected.mode} position={selected.position} detailsRef={detailsRef} onClose={onClose}
           issPlayerVisible={issPlayerVisible} issPlayerDetached={issPlayerDetached} issVideoUnavailable={issVideoUnavailable}
           onInlinePlayerHost={onInlinePlayerHost} onDetachISSPlayer={onDetachISSPlayer}

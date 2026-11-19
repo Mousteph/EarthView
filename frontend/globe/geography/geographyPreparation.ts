@@ -1,5 +1,5 @@
 import { ShapeUtils, Vector2, Vector3 } from "three";
-import { geoToVector3, type GeoCoordinate } from "@/globe/geo";
+import { geoToVector3, type GeoCoordinate } from "../geo.ts";
 
 type Position = GeoCoordinate;
 type Polygon = Position[][];
@@ -186,11 +186,12 @@ function appendRingLines(
   builder: IndexedGeometryBuilder,
   segments: Set<string>,
   ring: Vector2[],
+  radius = geographyRadius,
 ) {
   for (let index = 0; index < ring.length; index += 1) {
-    const start = geoToVector3([ring[index].x, ring[index].y], geographyRadius);
+    const start = geoToVector3([ring[index].x, ring[index].y], radius);
     const next = ring[(index + 1) % ring.length];
-    const end = geoToVector3([next.x, next.y], geographyRadius);
+    const end = geoToVector3([next.x, next.y], radius);
     const startIndex = addVertex(builder, start);
     const endIndex = addVertex(builder, end);
     const key = startIndex < endIndex
@@ -207,7 +208,7 @@ function asLineStrings(geometry: LineStringGeometry | MultiLineStringGeometry): 
   return geometry.type === "LineString" ? [geometry.coordinates] : geometry.coordinates;
 }
 
-function appendPathLines(builder: IndexedGeometryBuilder, coordinates: Position[]) {
+function appendPathLines(builder: IndexedGeometryBuilder, coordinates: Position[], radius = geographyRadius) {
   if (coordinates.length < 2) return;
 
   const path = unwrapClosedRing(coordinates);
@@ -228,8 +229,8 @@ function appendPathLines(builder: IndexedGeometryBuilder, coordinates: Position[
   points.push(path[path.length - 1]);
 
   for (let index = 1; index < points.length; index += 1) {
-    const start = geoToVector3([points[index - 1].x, points[index - 1].y], geographyRadius);
-    const end = geoToVector3([points[index].x, points[index].y], geographyRadius);
+    const start = geoToVector3([points[index - 1].x, points[index - 1].y], radius);
+    const end = geoToVector3([points[index].x, points[index].y], radius);
     const startIndex = addVertex(builder, start);
     const endIndex = addVertex(builder, end);
     builder.indices.push(startIndex, endIndex);
@@ -273,7 +274,7 @@ function appendPolygonCollection(
 
       if (outlines) {
         const outlineSegments = new Set<string>();
-        for (const ring of rings) appendRingLines(outlines, outlineSegments, ring);
+        for (const ring of rings) appendRingLines(outlines, outlineSegments, ring, radius);
       }
     }
   }
@@ -333,4 +334,18 @@ export function prepareGeography(data: GeographySources): PreparedGeography {
     sourceVertices: sourceVertexCount.value,
     buildMilliseconds: performance.now() - startedAt,
   };
+}
+
+/** Use the same spherical triangulation, holes, and longitude unwrapping as geography. */
+export function prepareOverlayGeometry(geometry: Geometry, radius = 1.003) {
+  const fill: IndexedGeometryBuilder = { positions: [], indices: [], vertices: new Map() };
+  const lines: IndexedGeometryBuilder = { positions: [], indices: [], vertices: new Map() };
+  if (geometry.type === "Polygon" || geometry.type === "MultiPolygon") {
+    appendPolygonCollection({ features: [{ geometry }] }, fill, lines, radius, { value: 0 });
+  } else {
+    for (const line of asLineStrings(geometry)) appendPathLines(lines, line, radius);
+  }
+  const linePositions = new Float32Array(lines.indices.length * 3);
+  lines.indices.forEach((vertex, index) => linePositions.set(lines.positions.slice(vertex * 3, vertex * 3 + 3), index * 3));
+  return { positions: new Float32Array(fill.positions), indices: new Uint32Array(fill.indices), linePositions };
 }

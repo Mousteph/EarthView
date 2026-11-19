@@ -18,16 +18,22 @@ import type { PipelineFuel } from "@/features/pipelines/model";
 import { filterPipelines, reconcilePipelineStatusFilters as reconcilePipelineStatusFilterValues } from "@/features/pipelines/filters";
 import { orbitalVisibilityMask } from "@/features/orbital/filters";
 import { orbitalObjectColor } from "@/features/orbital/colors";
+import { filterSevereEvents, severeEventColorToken } from "@/features/severe-events/filters";
+import { useSevereEventOverlays, useSevereEventDetails } from "@/features/severe-events/useSevereEventEnrichment";
+import { mergeOverlays, visibleOverlays } from "@/features/severe-events/enrichment";
+import { mergeEarthquakes, filterEarthquakes } from "@/features/earthquakes/merge";
+import type { SevereEvent } from "@/features/severe-events/model";
 
 export function MapView() {
   const [hasInteracted, setHasInteracted] = useState(false);
   const markInteracted = useCallback(() => setHasInteracted(true), []);
-  const { earthquakesVisible, firesVisible, visualLayers, enabledOrbitalModes, enabledPipelineFuels, pipelineStatusFilters, orbitalFilters, selection,
-    toggleEarthquakes: toggleEarthquakesState, toggleFires: toggleFiresState, toggleOrbitalMode,
+  const { earthquakeSourceFilters, changeEarthquakeSources, reconcileSevereAlerts, severeAlertFilters, changeSevereAlertFilter, earthquakesVisible, firesVisible, enabledSevereEventCategories, visualLayers, enabledOrbitalModes, enabledPipelineFuels, pipelineStatusFilters, orbitalFilters, selection,
+    toggleSevereEventCategory: toggleSevereEventCategoryState, reconcileSevereEventCategories: reconcileSevereEventCategoriesState, toggleOrbitalMode,
     toggleVisualLayer,
     togglePipelineFuel: togglePipelineFuelState, changePipelineStatusFilters, reconcilePipelineStatusFilters: reconcilePipelineStatusFilterState,
     changeOrbitalFilter, select, clearSelection, reconcileSelection } = useMapState();
   const satellitesVisible = enabledOrbitalModes.length > 0;
+  const severeEventColorFor = useCallback((event: SevereEvent) => severeEventColorToken(event, enabledSevereEventCategories), [enabledSevereEventCategories]);
   const [selectedSatellitePosition, setSelectedSatellitePosition] = useState<SelectedSatellitePosition | null>(null);
   const [issPlayerLifecycle, dispatchISSPlayer] = useReducer(issPlayerLifecycleReducer, initialISSPlayerLifecycle);
   const [inlineISSPlayerHost, setInlineISSPlayerHostState] = useState<HTMLDivElement | null>(null);
@@ -43,10 +49,14 @@ export function MapView() {
   const {
     earthquakeFeed: earthquakesData,
     fireFeed: firesData,
+    severeEventFeed: severeEventsData,
     pipelineFeeds,
     orbitalFeeds: { active: satellitesData, debris: debrisData, rocketBodies: rocketBodiesData },
-    earthquakes,
+    earthquakes: baseEarthquakes,
     fires,
+    severeEvents,
+    severeEventOptions,
+    severeEventCounts: baseCategoryCounts,
     pipelines,
     pipelineCatalog,
     pipelineFilters,
@@ -58,20 +68,47 @@ export function MapView() {
     orbitalSummaryItems,
     refreshSatellites,
     refreshPipelines,
-  } = useMapLayers(enabledOrbitalModes, orbitalFilters, enabledPipelineFuels, pipelineStatusFilters);
-  const selectionData: SelectionData = useMemo(() => ({
-    earthquakes, fires, orbitalObjects, orbitalVisibility: visibleMask, earthquakesVisible, firesVisible,
+  } = useMapLayers(enabledSevereEventCategories, enabledOrbitalModes, orbitalFilters, enabledPipelineFuels, pipelineStatusFilters, severeAlertFilters, earthquakeSourceFilters);
+  useEffect(() => {
+    if (severeEventsData.hasLoaded) reconcileSevereAlerts(severeEventsData.events);
+  }, [severeEventsData.hasLoaded, severeEventsData.events, reconcileSevereAlerts]);
+  const baseSelectionData: SelectionData = useMemo(() => ({
+    earthquakes: baseEarthquakes, fires, severeEvents, orbitalObjects, orbitalVisibility: visibleMask, earthquakesVisible, firesVisible, enabledSevereEventCategories,
     enabledOrbitalModes, selectedSatellitePosition,
     pipelines, enabledPipelineFuels,
-  }), [earthquakes, fires, orbitalObjects, visibleMask, earthquakesVisible, firesVisible, enabledOrbitalModes, selectedSatellitePosition, pipelines, enabledPipelineFuels]);
+  }), [baseEarthquakes, fires, severeEvents, orbitalObjects, visibleMask, earthquakesVisible, firesVisible, enabledSevereEventCategories, enabledOrbitalModes, selectedSatellitePosition, pipelines, enabledPipelineFuels]);
+  const baseSelected = resolveSelection(selection, baseSelectionData);
+  const selectedSevereEvent = baseSelected?.type === "severe-events" ? baseSelected.event : baseSelected?.type === "earthquakes" ? baseSelected.event.gdacs : null;
+  const overviewCategories = enabledSevereEventCategories.filter((c) => c === "cyclones" || c === "droughts" || c === "wildfires").sort().join(",");
+  const overviewRevision = severeEventsData.events.filter((e) => e.categories.some((category) => enabledSevereEventCategories.includes(category.id))).filter((e) => e.eventType === "TC" || e.eventType === "DR" || e.eventType === "WF").map((e) => `${e.id}:${e.episodeId}:${e.updatedAt}`).join(";");
+  const overlayFeed = useSevereEventOverlays(overviewCategories && severeEventsData.hasLoaded ? `/api/severe-events/overlays?categories=${overviewCategories}` : null, overviewRevision);
+  const detailFeed = useSevereEventDetails(selectedSevereEvent ? `/api/severe-events/${selectedSevereEvent.eventType}/${selectedSevereEvent.id.split(":")[1]}/details?episode=${selectedSevereEvent.episodeId ?? ""}&updated=${selectedSevereEvent.updatedAt}` : null);
+  const displayedSevereEvents = useMemo(() => severeEvents.map((event) =>
+    detailFeed.data?.event.id === event.id && !detailFeed.stale ? detailFeed.data.event : event).filter((event) => filterSevereEvents([event], enabledSevereEventCategories, severeAlertFilters).length), [severeEvents, detailFeed.data, detailFeed.stale, enabledSevereEventCategories, severeAlertFilters]);
+  const assessedEarthquakes = useMemo(() => mergeEarthquakes(earthquakesData.earthquakes,
+    severeEventsData.events.map((event) => detailFeed.data?.event.id === event.id && !detailFeed.stale ? detailFeed.data.event : event),
+    earthquakesData.checkedAt), [earthquakesData.earthquakes, earthquakesData.checkedAt, severeEventsData.events, detailFeed.data, detailFeed.stale]);
+  const earthquakes = useMemo(() => filterEarthquakes(assessedEarthquakes, earthquakeSourceFilters, severeAlertFilters.earthquakes ?? []), [assessedEarthquakes, earthquakeSourceFilters, severeAlertFilters]);
+  const severeEventCounts: Record<string, number> = { ...baseCategoryCounts, earthquakes: earthquakes.length };
+  for (const category of enabledSevereEventCategories) {
+    if (category !== "earthquakes" && category !== "active-fires") severeEventCounts[category] = displayedSevereEvents.filter((event) => event.categories.some((c) => c.id === category)).length;
+  }
+  const geometryEvents = useMemo(() => [...displayedSevereEvents, ...(earthquakesVisible ? earthquakes.flatMap((event) => event.gdacs ? [event.gdacs] : []) : [])], [displayedSevereEvents, earthquakes, earthquakesVisible]);
+  const selectionData: SelectionData = useMemo(() => ({ ...baseSelectionData, earthquakes, severeEvents: displayedSevereEvents }), [baseSelectionData, earthquakes, displayedSevereEvents]);
   const selected: SelectedEvent | null = resolveSelection(selection, selectionData);
+  const severeEventOverlays = useMemo(() => {
+    const overview = visibleOverlays(overlayFeed.data?.overlays ?? [], geometryEvents);
+    // Preserve overview geometry if selected enrichment has no geometry or failed.
+    const details = detailFeed.data?.overlays.length && visibleOverlays(detailFeed.data.overlays, geometryEvents).length ? detailFeed.data : null;
+    return mergeOverlays(overview, details);
+  }, [overlayFeed.data, detailFeed.data, geometryEvents]);
   const isISSSelected = selected?.type === "satellites" && isInternationalSpaceStation(selected.event);
   const issPlayerVisible = shouldMountISSPlayer(issPlayerLifecycle);
   const hoverData: HoverData = useMemo(() => ({
-    earthquakes, fires, orbitalObjects, orbitalVisibility: visibleMask, earthquakesVisible, firesVisible,
+    earthquakes, fires, severeEvents: displayedSevereEvents, orbitalObjects, orbitalVisibility: visibleMask, earthquakesVisible, firesVisible, enabledSevereEventCategories,
     satellitesVisible, pipelines, pipelinesVisible: enabledPipelineFuels.length > 0,
     orbitalColorFor: orbitalObjectColor,
-  }), [earthquakes, fires, orbitalObjects, visibleMask, earthquakesVisible, firesVisible, satellitesVisible, pipelines, enabledPipelineFuels]);
+  }), [earthquakes, fires, displayedSevereEvents, orbitalObjects, visibleMask, earthquakesVisible, firesVisible, enabledSevereEventCategories, satellitesVisible, pipelines, enabledPipelineFuels]);
   const {
     hoverTooltip, hovered, globeCanvasRef, hoverTooltipRef,
     handleHover, handleHoverEnd, clearHover, handlePointerEnter, handlePointerDown, handlePointerMove,
@@ -86,6 +123,9 @@ export function MapView() {
     reconcilePipelineStatusFilterState(reconcilePipelineStatusFilterValues(pipelineStatusFilters, pipelineFilters));
   }, [pipelineFilters, pipelineStatusFilters, reconcilePipelineStatusFilterState]);
   useEffect(() => {
+    reconcileSevereEventCategoriesState(severeEventOptions);
+  }, [reconcileSevereEventCategoriesState, severeEventOptions]);
+  useEffect(() => {
     dispatchISSPlayer({ type: "selection", isISSSelected });
   }, [isISSSelected, issPlayerLifecycle.detached]);
 
@@ -93,15 +133,13 @@ export function MapView() {
     reconcileSelection(next);
   };
 
-  const toggleEarthquakes = () => {
-    if (!earthquakesVisible && !earthquakesData.hasLoaded && !earthquakesData.isLoading) void earthquakesData.refresh();
-    reconcile({ ...selectionData, earthquakesVisible: !earthquakesVisible });
-    toggleEarthquakesState();
-  };
-  const toggleFires = () => {
-    if (!firesVisible && !firesData.hasLoaded && !firesData.isLoading) void firesData.refresh();
-    reconcile({ ...selectionData, firesVisible: !firesVisible });
-    toggleFiresState();
+  const handleSevereEventCategoryToggle = (categoryId: string) => {
+    const nextCategories = enabledSevereEventCategories.includes(categoryId)
+      ? enabledSevereEventCategories.filter((item) => item !== categoryId)
+      : [...enabledSevereEventCategories, categoryId];
+    const nextEvents = filterSevereEvents(severeEventsData.events.filter((e) => e.eventType !== "EQ"), nextCategories, severeAlertFilters);
+    reconcile({ ...selectionData, severeEvents: nextEvents, enabledSevereEventCategories: nextCategories, earthquakesVisible: nextCategories.includes("earthquakes"), firesVisible: nextCategories.includes("active-fires") });
+    toggleSevereEventCategoryState(categoryId);
   };
   const handleOrbitalModeToggle = (mode: OrbitalMode) => {
     const nextModes = enabledOrbitalModes.includes(mode) ? enabledOrbitalModes.filter((item) => item !== mode) : [...enabledOrbitalModes, mode];
@@ -124,13 +162,20 @@ export function MapView() {
     reconcile({ ...selectionData, orbitalVisibility: orbitalVisibilityMask(orbitalObjects, satelliteCatalog, nextFilters) });
     changeOrbitalFilter(group, values);
   };
-  const refreshEarthquakes = () => void earthquakesData.refresh();
-  const refreshFires = () => void firesData.refresh();
+  const refreshSevereEvents = () => {
+    if (enabledSevereEventCategories.some((c) => c !== "active-fires")) void severeEventsData.refresh();
+    if (earthquakesVisible) void earthquakesData.refresh();
+    if (firesVisible) void firesData.refresh();
+  };
   const refreshSatelliteFeeds = () => void refreshSatellites();
   const refreshPipelineFeeds = () => void refreshPipelines();
 
   const handleEarthquakeSelect = useCallback((id: string) => select({ type: "earthquakes", id }), [select]);
   const handleFireSelect = useCallback((id: string) => select({ type: "fires", id }), [select]);
+  const handleSevereEventSelect = useCallback((id: string) => {
+    const earthquake = earthquakes.find((e) => e.gdacs?.id === id);
+    select(earthquake ? { type: "earthquakes", id: earthquake.id } : { type: "severe-events", id });
+  }, [earthquakes, select]);
   const handleSatelliteSelect = useCallback((id: string) => {
     setSelectedSatellitePosition(null);
     select({ type: "satellites", id });
@@ -156,12 +201,12 @@ export function MapView() {
   const markISSVideoUnavailable = useCallback(() => dispatchISSPlayer({ type: "error" }), []);
 
   const layers: LayerControl[] = [
-    { id: "earthquakes", label: "Earthquakes", description: "Seismic activity, real time", visible: earthquakesVisible,
-      hasLoaded: earthquakesData.hasLoaded, isLoading: earthquakesData.isLoading, error: earthquakesData.error,
-      count: earthquakes.length, onToggle: toggleEarthquakes, onRefresh: () => void refreshEarthquakes() },
-    { id: "fires", label: "Active Fires", description: "Wildfires and thermal hotspots", visible: firesVisible,
-      hasLoaded: firesData.hasLoaded, isLoading: firesData.isLoading, error: firesData.error,
-      count: fires.length, onToggle: toggleFires, onRefresh: () => void refreshFires() },
+    { id: "severe-events", label: "Severe Events", description: "Earthquakes, alerts & satellite heat detections", visible: enabledSevereEventCategories.length > 0,
+      hasLoaded: (earthquakesVisible && earthquakesData.hasLoaded) || (firesVisible && firesData.hasLoaded) || (enabledSevereEventCategories.some((c) => c !== "active-fires") && severeEventsData.hasLoaded),
+      isLoading: (earthquakesVisible && earthquakesData.isLoading) || (firesVisible && firesData.isLoading) || (enabledSevereEventCategories.some((c) => c !== "active-fires") && severeEventsData.isLoading),
+      error: (earthquakesVisible ? earthquakesData.error : null) ?? (firesVisible ? firesData.error : null) ?? (enabledSevereEventCategories.some((c) => c !== "active-fires") ? severeEventsData.error : null) ?? overlayFeed.error ?? (overlayFeed.data?.unavailable.length ? "Some hazard geometry is unavailable" : null),
+      stale: (earthquakesVisible && earthquakesData.stale) || (firesVisible && firesData.hasLoaded && !!firesData.error) || (enabledSevereEventCategories.some((c) => c !== "active-fires") && severeEventsData.stale) || overlayFeed.stale,
+      count: displayedSevereEvents.length + (earthquakesVisible ? earthquakes.length : 0) + (firesVisible ? fires.length : 0), onRefresh: refreshSevereEvents },
     { id: "satellites", label: "Satellites", description: "Objects in Earth orbit", visible: satellitesVisible,
       hasLoaded: orbitalSummaryItems.some((item) => item.hasLoaded && enabledOrbitalModes.includes(item.id)),
       isLoading: [satellitesData, debrisData, rocketBodiesData].some((data, index) => enabledOrbitalModes.includes((["active", "debris", "rocket_bodies"] as const)[index]) && data.isLoading),
@@ -220,9 +265,15 @@ export function MapView() {
           autoRotate={!hasInteracted}
           earthquakes={earthquakes}
           earthquakesVisible={earthquakesVisible}
-          selectedEarthquakeId={selection?.type === "earthquakes" ? selection.id : null}
+          selectedEarthquakeId={selected?.type === "earthquakes" ? selected.event.id : null}
           fires={fires}
           firesVisible={firesVisible}
+          severeEvents={displayedSevereEvents}
+          severeEventOverlays={severeEventOverlays}
+          enabledSevereEventCategories={enabledSevereEventCategories}
+          severeEventColorFor={severeEventColorFor}
+          selectedSevereEventId={selectedSevereEvent?.id ?? null}
+          onSevereEventSelect={handleSevereEventSelect}
           satellites={orbitalObjects}
           satellitesVisible={satellitesVisible}
           satelliteVisibility={visibleMask}
@@ -259,7 +310,7 @@ export function MapView() {
         {hoverTooltip.detail ? <span className="globe-hover-detail">{hoverTooltip.detail}</span> : null}
       </div> : null}
       <EarthViewHeader />
-      <LayerControls layers={layers} selected={selected} detailsRef={detailsRef} onClose={clearSelection} summaryItems={orbitalSummaryItems}
+      <LayerControls severeEventDetails={detailFeed} layers={layers} selected={selected} detailsRef={detailsRef} onClose={clearSelection} summaryItems={orbitalSummaryItems}
         issPlayerVisible={issPlayerVisible} issPlayerDetached={issPlayerLifecycle.detached} issVideoUnavailable={issPlayerLifecycle.unavailable}
         onInlinePlayerHost={registerInlineISSPlayerHost} onDetachISSPlayer={detachISSPlayer}
         onRetryISSPlayer={retryISSPlayer} onShowISSPlayer={showISSPlayer}
@@ -267,7 +318,12 @@ export function MapView() {
           selectedFilters: orbitalFilters, onFilterChange: handleOrbitalFilterChange }}
         pipelineControls={{ enabledFuels: enabledPipelineFuels, feeds: pipelineFeeds, statusOptions: pipelineFilters,
           selectedStatuses: pipelineStatusFilters, counts: pipelineCounts, onToggle: handlePipelineFuelToggle,
-          onStatusChange: handlePipelineStatusChange }} />
+          onStatusChange: handlePipelineStatusChange }}
+        severeEventControls={{ events: severeEventsData.events, alertFilters: severeAlertFilters, onAlertChange: changeSevereAlertFilter, categories: severeEventOptions, enabledCategories: enabledSevereEventCategories, counts: severeEventCounts,
+          loadedCategories: severeEventOptions.filter((c) => c.id === "active-fires" ? firesData.hasLoaded : c.id === "earthquakes" ? earthquakesData.hasLoaded || severeEventsData.hasLoaded : severeEventsData.hasLoaded).map((c) => c.id),
+          earthquakes: assessedEarthquakes, sourceFilters: earthquakeSourceFilters, onSourcesChange: changeEarthquakeSources,
+          errors: { earthquakes: [earthquakesData.error ? `USGS: ${earthquakesData.error}` : null, severeEventsData.error ? `GDACS: ${severeEventsData.error}` : null].filter(Boolean).join(" · ") || null, "active-fires": firesData.error },
+          onToggle: handleSevereEventCategoryToggle }} />
       <ISSLivePlayerHost lifecycle={issPlayerLifecycle} inlineHost={inlineISSPlayerHost} onDock={dockISSPlayer} onClose={closeISSPlayer}
         unavailable={issPlayerLifecycle.unavailable} onUnavailable={markISSVideoUnavailable} onRetry={retryISSPlayer} retryToken={issPlayerRetryToken} />
       {mapScale ? <div className="map-scale" aria-label={`Scale: ${new Intl.NumberFormat("en-US").format(mapScale.distanceKm)} kilometers`}>

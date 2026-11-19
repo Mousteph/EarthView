@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { formatCount } from "./format";
+import { LayerIcon, type LayerIconName } from "./LayerIcon";
 
 type LayerRowBase = {
   readonly label: string;
@@ -13,10 +14,7 @@ type LayerRowBase = {
   readonly onRefresh: () => void;
 };
 
-export type LayerRowModel = LayerRowBase & (
-  | { readonly id: "earthquakes" | "fires"; readonly onToggle: () => void }
-  | { readonly id: "satellites" | "pipelines" }
-);
+export type LayerRowModel = LayerRowBase & { readonly id: "severe-events" | "satellites" | "pipelines" };
 
 export function LayerRow({ layer, expanded, onDisclosure, children }: {
   readonly layer: LayerRowModel;
@@ -24,18 +22,18 @@ export function LayerRow({ layer, expanded, onDisclosure, children }: {
   readonly onDisclosure?: () => void;
   readonly children?: ReactNode;
 }) {
-  const isDisclosure = layer.id === "satellites" || layer.id === "pipelines";
-  const handleToggle = () => {
-    if (layer.id === "earthquakes" || layer.id === "fires") layer.onToggle();
-    else onDisclosure?.();
+  const iconByLayer: Readonly<Record<LayerRowModel["id"], LayerIconName>> = {
+    "severe-events": "triangle-alert",
+    satellites: "satellite",
+    pipelines: "route",
   };
   return <div className="layer-row">
     <div className="layer-actions">
-      <button className={`layer-toggle layer-toggle-${layer.id}`} type="button" onClick={handleToggle}
-        aria-label={isDisclosure ? `${expanded ? "Collapse" : "Expand"} ${layer.label} options` : `${layer.visible ? "Hide" : "Show"} ${layer.label} layer`}
-        aria-pressed={isDisclosure ? undefined : layer.visible} aria-expanded={isDisclosure ? expanded : undefined}
+      <button className={`layer-toggle layer-toggle-${layer.id}`} type="button" onClick={onDisclosure}
+        aria-label={`${expanded ? "Collapse" : "Expand"} ${layer.label} options`}
+        aria-expanded={expanded}
         data-visible={layer.visible} data-tooltip={layer.label}>
-        <span className="layer-toggle-circle" aria-hidden="true" />
+        <LayerIcon className="layer-row-icon" name={iconByLayer[layer.id]} />
         <span className="layer-copy"><strong>{layer.label}{layer.visible && layer.hasLoaded ? <> <output className="layer-heading-count">– {formatCount(layer.count)}</output></> : null}</strong><span>{layer.description}</span></span>
       </button>
       <button className="layer-refresh" type="button" onClick={layer.onRefresh} disabled={layer.isLoading} aria-label={`Refresh ${layer.label}`} title={`Refresh ${layer.label}`}>

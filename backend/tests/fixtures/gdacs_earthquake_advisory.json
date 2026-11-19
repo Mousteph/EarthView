@@ -1,0 +1,51 @@
+{
+  "type": "Feature",
+  "bbox": [
+    -82.7171,
+    5.3695,
+    -82.7171,
+    5.3695
+  ],
+  "geometry": {
+    "type": "Point",
+    "coordinates": [
+      -82.7171,
+      5.3695
+    ]
+  },
+  "properties": {
+    "eventtype": "EQ",
+    "eventid": 1569463,
+    "episodeid": 1737693,
+    "name": "Earthquake in South Of Panama",
+    "description": "Earthquake in South Of Panama",
+    "url": {
+      "geometry": "https://www.gdacs.org/gdacsapi/api/polygons/getgeometry?eventtype=EQ&eventid=1569463&episodeid=1737693",
+      "report": "https://www.gdacs.org/report.aspx?eventid=1569463&episodeid=1737693&eventtype=EQ",
+      "media": "https://www.gdacs.org/gdacsapi/api/emm/getemmnewsbykey?eventtype=EQ&eventid=1569463",
+      "eventnews": "https://www.gdacs.org/gdacsapi/api/news/getnewsbygdacskey?eventtype=EQ&eventid=1569463"
+    },
+    "alertlevel": "Green",
+    "country": "South Of Panama",
+    "fromdate": "2026-10-04T14:06:10",
+    "datemodified": "2026-10-04T14:31:24",
+    "source": "NEIC",
+    "sourceid": "us6000tzj8",
+    "severitydata": {
+      "severity": 5.0,
+      "severitytext": "Magnitude 5M, Depth:10km",
+      "severityunit": "M"
+    },
+    "earthquakedetails": {
+      "country": "South Of Panama",
+      "depth": "10",
+      "magnitude": "5",
+      "episodedatelocal": "2026-10-04T08:06:10",
+      "shakepop": "0",
+      "shakepopdescription": "",
+      "rapidpop": "0",
+      "rapidpopdescription": ""
+    },
+    "documents": {}
+  }
+}

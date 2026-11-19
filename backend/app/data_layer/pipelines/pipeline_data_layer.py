@@ -11,6 +11,7 @@ from .source import GlobalEnergyMonitorPipelineSource
 
 class PipelineDataLayer:
     CACHE_INTERVAL_SECONDS = 24 * 60 * 60
+    RETRY_INTERVAL_SECONDS = 60
     DATASETS = {
         "gas": ("Global Gas Infrastructure Tracker", "November 2025", "https://globalenergymonitor.org/projects/global-gas-infrastructure-tracker"),
         "oil": ("Global Oil Infrastructure Tracker", "June 2026", "https://globalenergymonitor.org/projects/global-oil-infrastructure-tracker"),
@@ -35,7 +36,7 @@ class PipelineDataLayer:
                 return cached.model_copy(update={"stale": False})
 
             last_attempt = self._last_attempt.get(fuel, 0)
-            if last_attempt and self._is_fresh(last_attempt, now):
+            if last_attempt and now - last_attempt < self.RETRY_INTERVAL_SECONDS * 1000:
                 if cached:
                     return cached.model_copy(update={"stale": True})
                 raise httpx.HTTPError("GEM pipeline data is unavailable until the next refresh attempt")

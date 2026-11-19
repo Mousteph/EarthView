@@ -1,16 +1,27 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import type { EarthquakeSource } from "@/features/earthquakes/model";
 import type { OrbitalMode } from "@/features/orbital/model";
 import type { PipelineFuel } from "@/features/pipelines/model";
 import { EMPTY_PIPELINE_STATUS_FILTERS, type PipelineStatusFilters } from "@/features/pipelines/filters";
+import { type SevereEventCategoryOption } from "@/features/severe-events/categories";
+import type { SevereEvent } from "@/features/severe-events/model";
+import type { SevereAlertFilters, SevereAlertLevel } from "@/features/severe-events/filters";
+import { reconcileSevereAlertFilters, reconcileSevereEventCategories as reconcileEventCategories, toggleSevereEventCategory as toggleEventCategory } from "@/features/severe-events/filters";
 import { EMPTY_ORBITAL_FILTERS, type OrbitalFilterGroup, type OrbitalFilters } from "@/features/orbital/filters";
 import { resolveSelection, type SelectionData, type SelectionKey } from "./selection";
 import { INITIAL_VISUAL_LAYER_STATE, toggleVisualLayer, type VisualLayerId } from "./visualLayers";
 
 export function useMapState() {
-  const [earthquakesVisible, setEarthquakesVisible] = useState(false);
-  const [firesVisible, setFiresVisible] = useState(false);
+  const [enabledSevereEventCategories, setEnabledSevereEventCategories] = useState<readonly string[]>([]);
+  const [earthquakeSourceFilters, setEarthquakeSourceFilters] = useState<readonly EarthquakeSource[]>([]);
+  const changeEarthquakeSources = useCallback((sources: readonly EarthquakeSource[]) => setEarthquakeSourceFilters(sources), []);
+  const earthquakesVisible = enabledSevereEventCategories.includes("earthquakes");
+  const firesVisible = enabledSevereEventCategories.includes("active-fires");
+  const [severeAlertFilters, setSevereAlertFilters] = useState<SevereAlertFilters>({});
+  const reconcileSevereAlerts = useCallback((events: readonly SevereEvent[]) => setSevereAlertFilters((current) => reconcileSevereAlertFilters(current, events)), []);
+  const changeSevereAlertFilter = useCallback((categoryId: string, values: readonly SevereAlertLevel[]) => setSevereAlertFilters((current) => ({ ...current, [categoryId]: values })), []);
   const [enabledOrbitalModes, setEnabledOrbitalModes] = useState<readonly OrbitalMode[]>([]);
   const [enabledPipelineFuels, setEnabledPipelineFuels] = useState<readonly PipelineFuel[]>([]);
   const [pipelineStatusFilters, setPipelineStatusFilters] = useState<PipelineStatusFilters>(EMPTY_PIPELINE_STATUS_FILTERS);
@@ -18,8 +29,13 @@ export function useMapState() {
   const [selection, setSelection] = useState<SelectionKey | null>(null);
   const [visualLayers, setVisualLayers] = useState(INITIAL_VISUAL_LAYER_STATE);
 
-  const toggleEarthquakes = useCallback(() => setEarthquakesVisible((visible) => !visible), []);
-  const toggleFires = useCallback(() => setFiresVisible((visible) => !visible), []);
+  const toggleSevereEventCategory = useCallback((categoryId: string) => setEnabledSevereEventCategories((current) =>
+    toggleEventCategory(current, categoryId)), []);
+  const reconcileSevereEventCategories = useCallback((categories: readonly SevereEventCategoryOption[]) =>
+    setEnabledSevereEventCategories((current) => {
+      const next = reconcileEventCategories(current, categories);
+      return current.length === next.length && current.every((category, index) => category === next[index]) ? current : next;
+    }), []);
   const toggleVisualLayerById = useCallback((layer: VisualLayerId) =>
     setVisualLayers((current) => toggleVisualLayer(current, layer)), []);
   const toggleOrbitalMode = useCallback((mode: OrbitalMode) => setEnabledOrbitalModes((current) =>
@@ -40,7 +56,7 @@ export function useMapState() {
   const reconcileSelection = useCallback((data: SelectionData) => setSelection((current) =>
     current && !resolveSelection(current, data) ? null : current), []);
 
-  return { earthquakesVisible, firesVisible, visualLayers, enabledOrbitalModes, enabledPipelineFuels, pipelineStatusFilters, orbitalFilters, selection,
-    toggleEarthquakes, toggleFires, toggleVisualLayer: toggleVisualLayerById, toggleOrbitalMode, togglePipelineFuel, changePipelineStatusFilters, reconcilePipelineStatusFilters,
+  return { earthquakeSourceFilters, changeEarthquakeSources, reconcileSevereAlerts, severeAlertFilters, changeSevereAlertFilter, earthquakesVisible, firesVisible, enabledSevereEventCategories, visualLayers, enabledOrbitalModes, enabledPipelineFuels, pipelineStatusFilters, orbitalFilters, selection,
+    toggleSevereEventCategory, reconcileSevereEventCategories, toggleVisualLayer: toggleVisualLayerById, toggleOrbitalMode, togglePipelineFuel, changePipelineStatusFilters, reconcilePipelineStatusFilters,
     changeOrbitalFilter, select, clearSelection, reconcileSelection };
 }

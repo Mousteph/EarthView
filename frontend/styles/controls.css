@@ -22,23 +22,24 @@
 
 .layer-toggle:focus-visible { outline: 2px solid var(--color-ink); outline-offset: 3px; border-radius: 8px; }
 
-.layer-toggle-earthquakes { --layer-color: var(--color-earthquake); }
-
-.layer-toggle-fires { --layer-color: var(--color-fire); }
+.layer-toggle-severe-events { --layer-color: var(--color-severe-other); }
 
 .layer-toggle-satellites { --layer-color: var(--color-satellite); }
 
 .layer-toggle-pipelines { --layer-color: var(--color-pipeline-gas); }
 
-.layer-toggle-circle { position: absolute; top: 50%; left: 0; display: grid; flex: none; place-items: center; width: var(--layer-control-marker-size); height: var(--layer-control-marker-size); box-sizing: border-box; border: 1.5px solid var(--layer-color); border-radius: 50%; background: transparent; transform: translateY(-50%); }
+.layer-row-icon { position: absolute; top: 50%; left: 0; width: 24px; height: 24px; color: var(--layer-color); transform: translateY(-50%); transition: opacity 110ms ease-out; }
 
-.layer-toggle-circle::after { width: 16px; height: 16px; border-radius: 50%; background: transparent; content: ""; }
+.layer-toggle[data-visible="false"] .layer-row-icon { opacity: 0.55; }
 
-.layer-toggle[data-visible="true"] .layer-toggle-circle::after { background: var(--layer-color); }
+.layer-option-icon { width: 15px; height: 15px; flex: none; color: var(--orbital-color, var(--pipeline-color)); transition: opacity 110ms ease-out; }
+
+.orbital-category-choice[aria-pressed="false"] .layer-option-icon,
+.pipeline-choice[aria-pressed="false"] .layer-option-icon { opacity: 0.52; }
 
 .layer-copy { display: grid; min-width: 0; gap: 5px; }
 
-.layer-copy, .layer-refresh, .orbital-disclosure, .layer-status, .orbital-options, .pipeline-options { transition: opacity 110ms ease-out; }
+.layer-copy, .layer-refresh, .orbital-disclosure, .layer-status, .orbital-options, .severe-event-options, .pipeline-options { transition: opacity 110ms ease-out; }
 
 .layer-copy strong { font-size: 12px; font-weight: 750; letter-spacing: 0.15em; line-height: 1.1; text-transform: uppercase; }
 
@@ -85,6 +86,8 @@
 
 .pipeline-options { display: grid; margin: 0 0 12px calc(48px + var(--layer-control-marker-inset)); }
 
+.severe-event-options { max-height: 280px; margin: 0 0 12px calc(48px + var(--layer-control-marker-inset)); overflow: auto; }
+
 .pipeline-fuel { border-top: 1px solid var(--color-orbital-border); }
 
 .pipeline-fuel-row { display: flex; min-width: 0; align-items: center; gap: 7px; }
@@ -92,10 +95,6 @@
 .pipeline-choice { display: flex; min-width: 0; min-height: 34px; flex: 1; align-items: center; gap: 8px; border: 0; padding: 0; background: transparent; color: var(--color-orbital-label); font: inherit; font-size: 11px; line-height: 1.25; text-align: left; cursor: pointer; }
 
 .pipeline-choice[aria-pressed="true"] { color: var(--color-orbital-label-active); }
-
-.pipeline-marker { width: 10px; height: 10px; flex: none; border-radius: 50%; background: transparent; box-shadow: inset 0 0 0 2px var(--pipeline-color); }
-
-.pipeline-choice[aria-pressed="true"] .pipeline-marker { background: var(--pipeline-color); }
 
 .pipeline-choice-gas { --pipeline-color: var(--color-pipeline-gas); }
 
@@ -124,10 +123,6 @@
 .orbital-category-count { color: var(--color-muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 .orbital-category-choice[aria-pressed="true"] { color: var(--color-orbital-label-active); }
-
-.orbital-category-marker { width: 10px; height: 10px; flex: none; border-radius: 50%; background: transparent; box-shadow: inset 0 0 0 2px var(--orbital-color); }
-
-.orbital-category-choice[aria-pressed="true"] .orbital-category-marker { background: var(--orbital-color); }
 
 .orbital-category-choice:focus-visible, .orbital-disclosure:focus-visible, .orbital-filter-heading:focus-visible, .orbital-filter-option:focus-visible { outline: 2px solid var(--color-ink); outline-offset: 2px; }
 
@@ -175,7 +170,7 @@
 
 .event-connector circle { stroke-width: 1.25; }
 
-.event-details-scroll { max-height: 76dvh; overflow-y: auto; padding: 28px 22px 24px; }
+.event-details-scroll { max-height: 76dvh; overflow-y: auto; overflow-x: hidden; padding: 28px 22px 24px; }
 
 .event-close { position: absolute; z-index: 1; top: 5px; right: 5px; display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 50%; padding: 5px; background: transparent; color: var(--color-body-muted); }
 
@@ -187,11 +182,14 @@
 
 .event-details-heading span:last-child { letter-spacing: 0.08em; }
 
-.event-primary > div:not(.orbital-primary-badges) { font-size: clamp(38px, 3vw, 52px); font-weight: 550; letter-spacing: -0.055em; line-height: 1.1; white-space: nowrap; }
+.event-primary > div:not(.orbital-primary-badges) { font-size: clamp(38px, 3vw, 52px); font-weight: 550; letter-spacing: -0.055em; line-height: 1.1; white-space: normal; overflow-wrap: anywhere; }
 
 .event-primary > .fire-primary-label { color: var(--color-fire); font-size: clamp(30px, 2.7vw, 46px); }
 
 .event-primary > .earthquake-primary-label { color: var(--color-earthquake); }
+.event-primary.severe-event-primary > div { color: var(--severe-event-accent, var(--color-severe-other)); }
+.event-primary.severe-event-primary > div { font-size: clamp(25px, 2.4vw, 36px); white-space: normal; }
+.event-primary.severe-event-primary .event-primary-caption { font-size: 11px; }
 
 .pipeline-primary > div:first-child { color: var(--color-inspection-heading); font-size: clamp(28px, 2.2vw, 36px) !important; letter-spacing: -0.035em !important; line-height: 1.15 !important; white-space: normal !important; }
 .pipeline-details-gas .pipeline-primary > div:first-child { color: var(--color-pipeline-gas); }
@@ -337,7 +335,7 @@
   .layer-copy > span { font-size: 10px; }
   .layer-controls { --layer-control-marker-size: 21px; }
   .layer-refresh svg { width: 18px; height: 18px; }
-  .orbital-options { max-height: 205px; margin-left: calc(34px + var(--layer-control-marker-inset)); }
+  .orbital-options, .severe-event-options { max-height: 205px; margin-left: calc(34px + var(--layer-control-marker-inset)); }
   .pipeline-options { margin-left: calc(34px + var(--layer-control-marker-inset)); }
   .orbital-filter-groups { max-height: 170px; }
   .event-details { top: auto; right: 20px; bottom: 175px; width: min(255px, calc(100vw - 40px)); }
@@ -370,6 +368,7 @@
 .layer-controls.is-compact .orbital-disclosure,
 .layer-controls.is-compact .layer-status,
 .layer-controls.is-compact .orbital-options,
+.layer-controls.is-compact .severe-event-options,
 .layer-controls.is-compact .pipeline-options { display: none; }
 .layer-controls.is-compact .layer-controls-scroll { overflow: visible; }
 
@@ -378,12 +377,14 @@
 .layer-controls.is-collapsing .orbital-disclosure,
 .layer-controls.is-collapsing .layer-status,
 .layer-controls.is-collapsing .orbital-options,
+.layer-controls.is-collapsing .severe-event-options,
 .layer-controls.is-collapsing .pipeline-options,
 .layer-controls.is-revealing .layer-copy,
 .layer-controls.is-revealing .layer-refresh,
 .layer-controls.is-revealing .orbital-disclosure,
 .layer-controls.is-revealing .layer-status,
 .layer-controls.is-revealing .orbital-options,
+.layer-controls.is-revealing .severe-event-options,
 .layer-controls.is-revealing .pipeline-options { opacity: 0; }
 
 .layer-controls.is-collapsing .layer-copy,
@@ -391,12 +392,13 @@
 .layer-controls.is-collapsing .orbital-disclosure,
 .layer-controls.is-collapsing .layer-status,
 .layer-controls.is-collapsing .orbital-options,
+.layer-controls.is-collapsing .severe-event-options,
 .layer-controls.is-collapsing .pipeline-options { transition-duration: 90ms; }
 
 @media (max-width: 760px) {
   .layer-controls.is-compact .layer-actions { min-height: 44px; }
   .layer-controls.is-expanding .layer-actions { min-height: 60px; }
-  .layer-toggle-circle::after { width: 12px; height: 12px; }
+  .layer-row-icon { width: 22px; height: 22px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -404,11 +406,60 @@
   .layer-controls .layer-controls-toolbar,
   .layer-controls .layer-actions,
   .layer-controls .layer-controls-toggle svg,
-  .layer-controls .layer-toggle-circle,
+  .layer-controls .layer-row-icon,
+  .layer-controls .layer-option-icon,
   .layer-controls .layer-copy,
   .layer-controls .layer-refresh,
   .layer-controls .orbital-disclosure,
   .layer-controls .layer-status,
   .layer-controls .orbital-options,
+  .layer-controls .severe-event-options,
   .layer-controls .pipeline-options { transition: none; }
 }
+
+.severe-event-legend { display: flex; flex-direction: column; gap: 7px; font-size: 11px; color: var(--color-body-muted); line-height: 1.5; }
+.severe-event-legend > span { display: flex; align-items: center; gap: 8px; }
+.severe-event-legend small { font-size: 10px; }
+.legend-track { display: inline-block; width: 20px; border-top: 2px solid var(--color-severe-cyclones); flex-shrink: 0; }
+.legend-track.forecast { border-top-style: dashed; }
+.legend-area { display: inline-block; width: 12px; height: 12px; border: 1px solid currentColor; background: color-mix(in srgb, currentColor 18%, transparent); flex-shrink: 0; }
+.legend-area.wildfire { color: var(--color-severe-wildfires); }
+.legend-area.drought { color: var(--color-severe-droughts); }
+.legend-area.wind-low { color: var(--color-hazard-wind-low); }
+.legend-area.wind-medium { color: var(--color-hazard-wind-medium); }
+.legend-area.wind-high { color: var(--color-hazard-wind-high); }
+.legend-area.uncertainty { color: var(--color-hazard-uncertainty); }
+.severe-event-note, .severe-event-status { font-size: 12px; line-height: 1.65; color: var(--color-body-muted); overflow-wrap: anywhere; }
+.severe-event-status { margin: 16px 0; }
+.severe-event-sources { padding-left: 16px; font-size: 12px; line-height: 1.8; }
+.severe-impact-reports { font-size: 12px; line-height: 1.6; }
+.severe-impact-reports summary { cursor: pointer; padding: 10px 0; }
+.severe-impact-reports article { padding: 10px 0; border-top: 1px solid var(--color-divider); }
+.severe-impact-reports small { display: block; color: var(--color-body-muted); }
+
+@media (max-width: 760px) { .severe-event-details { z-index: 12; } }
+
+.severe-alert-green { --alert-color: var(--color-alert-green); }
+.severe-alert-orange { --alert-color: var(--color-alert-orange); }
+.severe-alert-red { --alert-color: var(--color-alert-red); }
+.severe-alert-unknown { --alert-color: var(--color-alert-unknown); }
+.severe-alert-badge { color: var(--alert-color); border-color: color-mix(in srgb, var(--alert-color) 40%, var(--color-pill-border)); background: color-mix(in srgb, var(--alert-color) 12%, var(--color-parchment)); }
+.severe-event-options .orbital-filter-option { --orbital-color: var(--alert-color); }
+.severe-event-options .orbital-category-marker { display: block; width: 9px; height: 9px; flex: none; border: 1.5px solid var(--orbital-color); border-radius: 50%; }
+.event-primary.severe-event-primary > .orbital-primary-badges { font-size: 11px; color: inherit; }
+.severe-event-details .orbital-detail-section h3 + * { margin-top: 9px; }
+.layer-category-description { display: block; margin-top: 3px; color: var(--color-muted); font-size: 9px; line-height: 1.35; }
+.severe-event-options .orbital-category-row { min-height: 44px; }
+.category-feed-error { margin: 0 0 7px 23px; color: var(--color-status-error); font-size: 10px; line-height: 1.4; }
+.earthquake-event-primary > .earthquake-primary-label { font-size: clamp(25px, 2.4vw, 36px); white-space: normal; }
+.severe-event-sources small { display: block; color: var(--color-body-muted); }
+
+/* Selected layer glyphs are solid; open line symbols use a heavier stroke. */
+.layer-toggle[data-visible="true"] .layer-row-icon,
+.orbital-category-choice[aria-pressed="true"] .layer-option-icon,
+.pipeline-choice[aria-pressed="true"] .layer-option-icon { fill: currentColor; stroke-width: 3; }
+.layer-row-icon[data-layer-icon="route"] path, .layer-option-icon[data-layer-icon="route"] path,
+.layer-row-icon[data-layer-icon="orbit"] path, .layer-option-icon[data-layer-icon="orbit"] path { fill: none; }
+.layer-icon-detail { fill: none; }
+.layer-toggle[data-visible="true"] .layer-icon-detail,
+.orbital-category-choice[aria-pressed="true"] .layer-icon-detail { stroke: var(--color-parchment); }

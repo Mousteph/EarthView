@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class Earthquake(BaseModel):
@@ -10,3 +10,6 @@ class Earthquake(BaseModel):
     location: str
     time: int
     depth: float
+    sourceIds: list[str] = Field(default_factory=list)
+    sourceUrl: str | None = None
+    updatedAt: int | None = None

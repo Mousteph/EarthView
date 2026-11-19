@@ -1,4 +1,6 @@
 from typing import Any, List
+from math import isfinite
+from urllib.parse import urlparse
 
 import httpx
 
@@ -8,7 +10,7 @@ from .models import Earthquake
 class EarthquakeDataLayer:
     """Fetch and normalize earthquake data from the USGS GeoJSON feed."""
 
-    feed_url = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson"
+    feed_url = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson"
     timeout = 10
 
     @staticmethod
@@ -37,8 +39,17 @@ class EarthquakeDataLayer:
             return None
         if isinstance(timestamp, bool) or not isinstance(timestamp, (int, float)):
             return None
-        if any(isinstance(value, bool) or not isinstance(value, (int, float)) for value in (longitude, latitude, depth)):
+        if any(isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value) for value in (longitude, latitude, depth, magnitude, timestamp)):
             return None
+        if not -90 <= latitude <= 90 or not -180 <= longitude <= 180:
+            return None
+
+        aliases = properties.get("ids")
+        source_ids = list(dict.fromkeys([event_id, *(item.strip() for item in aliases.split(",") if item.strip())])) if isinstance(aliases, str) else [event_id]
+        source_url = properties.get("url")
+        parsed = urlparse(source_url) if isinstance(source_url, str) else None
+        source_url = source_url if parsed and parsed.scheme == "https" and parsed.hostname == "earthquake.usgs.gov" else f"https://earthquake.usgs.gov/earthquakes/eventpage/{event_id}"
+        updated = properties.get("updated")
 
         return Earthquake(
             id=event_id,
@@ -49,6 +60,9 @@ class EarthquakeDataLayer:
             location=place,
             time=int(timestamp),
             depth=float(depth),
+            sourceIds=source_ids,
+            sourceUrl=source_url,
+            updatedAt=int(updated) if isinstance(updated, (int, float)) and not isinstance(updated, bool) and isfinite(updated) else None,
         )
 
     async def fetch(self) -> List[Earthquake]:
